@@ -77,6 +77,7 @@ import ChurnDashboard from './components/ChurnDashboard';
 import QoeGponDashboard from './components/QoeGponDashboard';
 import { QoeGponRow, generateSampleQoeGponData } from './data/qoeGponData';
 import { At1AnaliticoTable } from './components/At1AnaliticoTable';
+import { GithubSyncManagerModal } from './components/GithubSyncManagerModal';
 
 // Diário de Bordo Types
 interface LogEntry {
@@ -1126,6 +1127,7 @@ export default function App() {
   const [logFetchError, setLogFetchError] = useState<string | null>(null);
   const [githubUrl, setGithubUrl] = useState('');
   const [showGithubInput, setShowGithubInput] = useState(false);
+  const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper to get environment variables with localStorage fallback
@@ -2416,22 +2418,44 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: isBuffer ? 'array' : 'binary', cellDates: true });
       
       // 1. Read Main Data
-      const analiticoSheetName = wb.SheetNames.find(name => {
+      let rawRows: any[] = [];
+      const exactAnalitico = wb.SheetNames.find(name => {
         const n = normalizeStr(name);
-        return n.includes('ANALITICO') || n.includes('VISITAS') || n.includes('DADOS') || n.includes('GERAL');
-      }) || wb.SheetNames.find(name => !normalizeStr(name).includes('BASE')) || wb.SheetNames[0];
-      
-      const ws = wb.Sheets[analiticoSheetName];
-      if (!ws) {
-        setIsImporting(false);
-        setImportError(`Planilha "${analiticoSheetName}" não encontrada.`);
-        return;
+        return n === 'ANALITICO' || n === 'ANALITICO AT1' || n === 'ANALITICO_AT1';
+      });
+
+      if (exactAnalitico && wb.Sheets[exactAnalitico]) {
+        rawRows = XLSX.utils.sheet_to_json(wb.Sheets[exactAnalitico]) as any[];
       }
-      const rawRows = XLSX.utils.sheet_to_json(ws) as any[];
+
+      // If exact main sheet was not found or was empty, check for monthly sheets (e.g. ANALITICO_AT1_INN_202610)
+      if (rawRows.length === 0) {
+        const monthlyAnaliticoSheets = wb.SheetNames.filter(name => {
+          const n = normalizeStr(name);
+          return (n.includes('ANALITICO') || n.includes('VISITAS') || n.includes('DADOS')) && !n.includes('TERMINAL') && !n.includes('BASE') && !n.includes('BAIXA');
+        });
+
+        if (monthlyAnaliticoSheets.length > 0) {
+          for (const sName of monthlyAnaliticoSheets) {
+            const sRows = XLSX.utils.sheet_to_json(wb.Sheets[sName]) as any[];
+            if (sRows && sRows.length > 0) {
+              rawRows = rawRows.concat(sRows);
+            }
+          }
+        }
+      }
+
+      // Last fallback sheet
+      if (rawRows.length === 0) {
+        const fallbackSheet = wb.SheetNames.find(name => !normalizeStr(name).includes('BASE') && !normalizeStr(name).includes('BAIXA')) || wb.SheetNames[0];
+        if (wb.Sheets[fallbackSheet]) {
+          rawRows = XLSX.utils.sheet_to_json(wb.Sheets[fallbackSheet]) as any[];
+        }
+      }
 
       if (rawRows.length === 0) {
         setIsImporting(false);
-        setImportError("Arquivo vazio ou sem dados válidos.");
+        setImportError("Planilha analítica vazia ou sem dados válidos.");
         return;
       }
 
@@ -2831,15 +2855,16 @@ export default function App() {
   };
 
   const handleGithubLoad = async (urlToLoad?: string | React.MouseEvent) => {
-    // Proactively clean legacy repo URLs from storage
+    // Proactively clean legacy repo URLs from storage and migrate to INDICADORES3
     try {
-      ['VITE_GITHUB_EXCEL_URL', 'VITE_GITHUB_AT1_URL', 'GITHUB_EXCEL', 'githubUrl'].forEach(key => {
+      ['VITE_GITHUB_AT1', 'VITE_GITHUB_EXCEL_URL', 'VITE_GITHUB_AT1_URL', 'GITHUB_EXCEL', 'githubUrl'].forEach(key => {
         const val = localStorage.getItem(key);
-        if (val && (val.includes('DASH_AT1_G1') || val.includes('INDICADORES_MANUT') || (val.includes('/INDICADORES/') && !val.includes('INDICADORES2')))) {
+        if (val && (val.includes('DASH_AT1_G1') || val.includes('INDICADORES_MANUT') || val.includes('INDICADORES2') || (val.includes('/INDICADORES/') && !val.includes('INDICADORES3')))) {
           const updated = val
-            .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES2/')
-            .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES2/')
-            .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES2/');
+            .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
+            .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
+            .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
+            .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
           localStorage.setItem(key, updated);
         }
       });
@@ -2849,9 +2874,10 @@ export default function App() {
     let targetUrl = (typeof urlToLoad === 'string' ? urlToLoad : null) || githubUrl || preConfiguredUrl;
     if (targetUrl) {
       targetUrl = targetUrl
-        .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES2/')
-        .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES2/')
-        .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES2/');
+        .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
+        .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
+        .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
+        .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
     }
     if (!targetUrl) return;
 
@@ -3102,6 +3128,19 @@ export default function App() {
                   <BookOpen className={cn("w-4 h-4 shrink-0", activeTab === 'logbook' ? "text-white" : "text-[#EE1D23]")} />
                   {!isSidebarCollapsed && <span className="truncate">Diário de Bordo</span>}
                 </button>
+
+                {/* CENTRAL GITHUB & ARQUIVOS */}
+                <button
+                  onClick={() => setIsGithubModalOpen(true)}
+                  title="Central de Arquivos & GitHub"
+                  className={cn(
+                    "flex items-center gap-2.5 px-2.5 py-2 rounded-xl font-black uppercase italic text-[11px] tracking-wide transition-all active:scale-95 whitespace-nowrap w-full text-left cursor-pointer border border-slate-200/80 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 mt-1 shadow-2xs",
+                    isSidebarCollapsed ? "md:justify-center md:px-0" : ""
+                  )}
+                >
+                  <RefreshCw className="w-4 h-4 shrink-0 text-[#EE1D23]" />
+                  {!isSidebarCollapsed && <span className="truncate">Arquivos & GitHub</span>}
+                </button>
               </nav>
             </div>
           </div>
@@ -3208,6 +3247,14 @@ export default function App() {
                           <span>Sincronizar GitHub</span>
                         </button>
                         <button
+                          onClick={() => setIsGithubModalOpen(true)}
+                          className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white font-black py-2 px-3.5 rounded-xl transition-all shadow-md active:scale-95 uppercase italic text-xs cursor-pointer"
+                          title="Central de Sincronização, Status e Upload de Arquivos"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-red-500" />
+                          <span>Central GitHub</span>
+                        </button>
+                        <button
                           onClick={() => fileInputRef.current?.click()}
                           className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-4 rounded-xl border border-slate-200 transition-all shadow-xs active:scale-95 uppercase italic text-xs cursor-pointer"
                           title="Importar planilha Excel"
@@ -3309,15 +3356,24 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
               <button
                 onClick={() => handleGithubLoad(getGithubAt1Url())}
-                className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 text-white font-black py-2.5 px-5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs"
+                className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 text-white font-black py-2.5 px-5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
               >
                 <Activity className="w-3.5 h-3.5" />
                 <span>Sincronizar GitHub</span>
               </button>
 
               <button
+                onClick={() => setIsGithubModalOpen(true)}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md active:scale-95 uppercase italic text-xs cursor-pointer"
+                title="Central de Sincronização, Status e Upload de Arquivos"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-red-500" />
+                <span>Central GitHub</span>
+              </button>
+
+              <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-black py-2.5 px-5 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-95 uppercase italic text-xs"
+                className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-black py-2.5 px-5 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-95 uppercase italic text-xs cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5 text-[#EE1D23]" />
                 <span>Importar Excel</span>
@@ -5449,6 +5505,17 @@ export default function App() {
             </motion.button>
           )}
         </AnimatePresence>
+
+        {/* Modal de Gerenciamento & Sincronização GitHub / Upload Local */}
+        <GithubSyncManagerModal 
+          isOpen={isGithubModalOpen}
+          onClose={() => setIsGithubModalOpen(false)}
+          onDataUpdated={(fileName) => {
+            if (activeTab === 'dashboard') {
+              handleGithubLoad(getGithubAt1Url());
+            }
+          }}
+        />
       </div>
     </ErrorBoundary>
   );

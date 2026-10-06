@@ -40,6 +40,7 @@ import {
   Tag
 } from 'lucide-react';
 import { MultiFilterSelect } from './MultiFilterSelect';
+import { GithubSyncManagerModal } from './GithubSyncManagerModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart, 
@@ -330,6 +331,7 @@ export default function Revisita30DDashboard() {
 
   // Monthly chart state
   const [mensalViewMode, setMensalViewMode] = useState<'bar' | 'composed' | 'line'>('bar');
+  const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
 
   const hasAutoLoadedRef = useRef(false);
 
@@ -337,11 +339,11 @@ export default function Revisita30DDashboard() {
   useEffect(() => {
     try {
       localStorage.removeItem('REVISITA_30D_DATA_V3');
-      // Migrate any legacy local storage pointing to INDICADORES2 for Jan_Jun
-      ['VITE_GITHUB_REVISITA_JAN_JUN_URL', 'GITHUB_REVISITA_JAN_JUN'].forEach(key => {
+      // Migrate any legacy local storage pointing to INDICADORES or INDICADORES2 to INDICADORES3
+      ['VITE_GITHUB_REVISITA_JAN_JUN_URL', 'GITHUB_REVISITA_JAN_JUN', 'VITE_GITHUB_REVISITA_JUL_DEZ_URL', 'GITHUB_REVISITA_JUL_DEZ', 'VITE_GITHUB_REVISITA_URL'].forEach(key => {
         const val = localStorage.getItem(key);
-        if (val && val.includes('/INDICADORES2/')) {
-          localStorage.setItem(key, val.replace('/INDICADORES2/', '/INDICADORES/'));
+        if (val && (val.includes('/INDICADORES/') || val.includes('/INDICADORES2/'))) {
+          localStorage.setItem(key, val.replace('/INDICADORES2/', '/INDICADORES3/').replace('/INDICADORES/', '/INDICADORES3/'));
         }
       });
     } catch (err) {
@@ -1784,6 +1786,16 @@ export default function Revisita30DDashboard() {
             >
               {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
               <span>Sincronizar GitHub (2 Arquivos)</span>
+            </button>
+
+            {/* Central GitHub & Upload */}
+            <button
+              onClick={() => setIsGithubModalOpen(true)}
+              className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white font-black py-2.5 px-3.5 rounded-xl transition-all shadow-md active:scale-95 uppercase italic text-xs cursor-pointer"
+              title="Central de Sincronização, Status e Upload Direto de Arquivos"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-red-500" />
+              <span>Central GitHub</span>
             </button>
 
             {/* Custom GitHub link toggle */}
@@ -3934,6 +3946,13 @@ export default function Revisita30DDashboard() {
       </div>
       </>
       )}
+
+      {/* Modal de Gerenciamento & Sincronização GitHub / Upload Local */}
+      <GithubSyncManagerModal 
+        isOpen={isGithubModalOpen}
+        onClose={() => setIsGithubModalOpen(false)}
+        onDataUpdated={() => handleGithubSyncBoth()}
+      />
     </div>
   );
 }

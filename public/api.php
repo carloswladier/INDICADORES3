@@ -72,22 +72,18 @@ if ($endpoint === 'proxy-github' || $action === 'proxy-github') {
     
     // Normaliza URL do GitHub
     $target = trim($rawUrl);
-    // Reescreve repositórios antigos para o repositório correto:
-    // REVISITA_30D_Jan_Jun está em carloswladier/INDICADORES
-    // Os demais arquivos estão em carloswladier/INDICADORES2
-    if (strpos($target, 'REVISITA_30D_Jan_Jun') !== false) {
-        $target = str_replace(
-            ['/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES2/'],
-            '/carloswladier/INDICADORES/',
-            $target
-        );
-    } else {
-        $target = str_replace(
-            ['/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES/'],
-            '/carloswladier/INDICADORES2/',
-            $target
-        );
+    if (strpos($target, 'ladier/') === 0) {
+        $target = 'carlosw' . $target;
     }
+    if (strpos($target, 'carloswladier/') === 0) {
+        $target = 'https://raw.githubusercontent.com/' . $target;
+    }
+    // Reescreve repositórios antigos para o repositório atual carloswladier/INDICADORES3
+    $target = str_replace(
+        ['/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES/'],
+        '/carloswladier/INDICADORES3/',
+        $target
+    );
 
     if (strpos($target, 'github.com') !== false && strpos($target, 'raw.githubusercontent.com') === false) {
         $target = str_replace(['github.com', '/blob/', '/raw/'], ['raw.githubusercontent.com', '/', '/'], $target);

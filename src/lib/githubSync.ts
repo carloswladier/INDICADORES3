@@ -1,28 +1,21 @@
 export const DEFAULT_GITHUB_URLS = {
-  at1: "https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx",
-  outage: "https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/OUTAGE_SGO.xlsx",
-  revisita: "https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/REVISITA_30D_Jul_Dez.xlsx",
-  revisitaJanJun: "https://raw.githubusercontent.com/carloswladier/INDICADORES/main/REVISITA_30D_Jan_Jun.xlsx",
-  revisitaJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/REVISITA_30D_Jul_Dez.xlsx",
-  at5: "https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/AT5_NORTE.xlsx",
-  qoeGpon: "https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/QOE_GPON_NORTE.xlsx",
+  at1: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx",
+  outage: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx",
+  revisita: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx",
+  revisitaJanJun: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx",
+  revisitaJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx",
+  at5: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/AT5_NORTE.xlsx",
+  qoeGpon: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx",
 };
 
-// Migrate deprecated repository URLs to current repositories
-// Note: REVISITA_30D_Jan_Jun is located in carloswladier/INDICADORES
-// While AT1, OUTAGE, QOE, and REVISITA_Jul_Dez are in carloswladier/INDICADORES2
+// Migrate deprecated repository URLs to current repository INDICADORES3
 function migrateDeprecatedRepoUrl(url: string): string {
   if (!url) return '';
-  if (url.includes('REVISITA_30D_Jan_Jun')) {
-    return url
-      .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES/')
-      .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES/')
-      .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES/');
-  }
   return url
-    .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES2/')
-    .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES2/')
-    .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES2/');
+    .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
+    .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
+    .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
+    .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
 }
 
 export function getEnvValue(key: string, altKeys: string[] = [], fallback = ''): string {
@@ -64,6 +57,14 @@ export function normalizeGithubRawUrl(targetUrl: string): string {
   if (!targetUrl) return '';
   let url = targetUrl.trim();
   
+  // Handle partial string pastes like 'ladier/INDICADORES3/...' or 'carloswladier/INDICADORES3/...'
+  if (url.startsWith('ladier/')) {
+    url = 'carlosw' + url;
+  }
+  if (url.startsWith('carloswladier/')) {
+    url = 'https://raw.githubusercontent.com/' + url;
+  }
+
   // Transform github.com web URLs to raw.githubusercontent.com
   if (url.includes('github.com') && !url.includes('raw.githubusercontent.com')) {
     url = url
@@ -74,6 +75,12 @@ export function normalizeGithubRawUrl(targetUrl: string): string {
   
   // Normalize /refs/heads/
   url = url.replace('/refs/heads/', '/');
+
+  // Strip accidental double slashes
+  url = url.replace(/(https?:\/\/)([^/]+)\/\//g, '$1$2/');
+
+  // Migrate legacy repo paths to INDICADORES3
+  url = migrateDeprecatedRepoUrl(url);
   
   // Ensure spaces in file names are encoded for fetch
   return url.replace(/ /g, '%20');
@@ -82,33 +89,47 @@ export function normalizeGithubRawUrl(targetUrl: string): string {
 export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<ArrayBuffer> {
   const primaryUrl = normalizeGithubRawUrl(targetUrl);
   
-  // Array of URL candidates to attempt
-  const candidates: string[] = [];
+  // Remote URL candidates to attempt
+  const remoteCandidates: string[] = [];
 
-  // 1. HIGHEST PRIORITY:
+  // 1. Primary requested URL
+  remoteCandidates.push(primaryUrl);
+
+  // 2. INDICADORES3 explicit equivalent
+  if (primaryUrl.includes('carloswladier')) {
+    const indic3 = primaryUrl
+      .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
+      .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
+      .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
+      .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
+    if (!remoteCandidates.includes(indic3)) {
+      remoteCandidates.push(indic3);
+    }
+  }
+
+  // 3. Known official URLs in INDICADORES3
+  if (primaryUrl.includes('DASH') && primaryUrl.includes('AT1')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx');
+  }
+  if (primaryUrl.includes('OUTAGE_SGO') || primaryUrl.includes('outage')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx');
+  }
+  if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
+  }
   if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES/main/REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('/REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('./REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/REVISITA_30D_Jan_Jun.xlsx');
-  } else if (primaryUrl.includes('carloswladier')) {
-    const indic2 = primaryUrl
-      .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES2/')
-      .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES2/')
-      .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES2/');
-    candidates.push(indic2);
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx');
+  }
+  if (primaryUrl.includes('QOE_GPON') || primaryUrl.includes('QOE')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx');
   }
 
-  // 2. Add primaryUrl
-  candidates.push(primaryUrl);
-  
-  // Also add original targetUrl in case it was already raw
-  if (targetUrl && targetUrl !== primaryUrl) {
-    candidates.push(targetUrl.trim().replace(/ /g, '%20'));
+  // 4. Raw targetUrl with encoded spaces if different
+  if (targetUrl && targetUrl !== primaryUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+    remoteCandidates.push(targetUrl.trim().replace(/ /g, '%20'));
   }
 
-  // Support file-specific local host fallbacks (especially for Hostinger Vite static hosting)
+  // Extract file name for local fallback
   const extractFilename = (u: string) => {
     try {
       const parts = u.split('/');
@@ -118,82 +139,11 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     }
   };
   const fileName = extractFilename(primaryUrl);
+  const localFallbacks: string[] = [];
   if (fileName) {
-    candidates.push(`/${fileName}`);
-    candidates.push(`./${fileName}`);
-    candidates.push(fileName);
-  }
-
-  // Support INDICADORES_MANUT and DASH_AT1_G1 transitions
-  if (primaryUrl.includes('INDICADORES_MANUT')) {
-    candidates.push(primaryUrl.replace('INDICADORES_MANUT', 'INDICADORES2'));
-    candidates.push(primaryUrl.replace('INDICADORES_MANUT', 'INDICADORES'));
-  }
-  if (primaryUrl.includes('DASH_AT1_G1')) {
-    candidates.push(primaryUrl.replace('DASH_AT1_G1', 'INDICADORES2'));
-    candidates.push(primaryUrl.replace('DASH_AT1_G1', 'INDICADORES_MANUT'));
-  }
-  
-  // If targetUrl contains AT1 filename variations
-  if (primaryUrl.includes('DASH') && primaryUrl.includes('AT1')) {
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx');
-    candidates.push('/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx');
-  }
-
-  // If targetUrl contains revisita filename variations
-  if (primaryUrl.includes('OUTAGE_SGO') || primaryUrl.includes('outage')) {
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/OUTAGE_SGO.xlsx');
-    candidates.push('/OUTAGE_SGO.xlsx');
-    candidates.push(primaryUrl.replace('OUTAGE_SGO.xlsx', 'OUTAGE_SGO_JAN_JUN.xlsx'));
-    candidates.push(primaryUrl.replace('OUTAGE_SGO.xlsx', 'OUTAGE_SGO_JUL_DEZ.xlsx'));
-    candidates.push(primaryUrl.replace('OUTAGE_SGO.xlsx', 'OUTAGE_SGO_Jan_Jun.xlsx'));
-    candidates.push(primaryUrl.replace('OUTAGE_SGO.xlsx', 'OUTAGE_SGO_Jul_Dez.xlsx'));
-    candidates.push(primaryUrl.replace('OUTAGE_SGO.xlsx', 'OUTAGE_SGO.XLSX'));
-    candidates.push(primaryUrl.replace('OUTAGE_SGO.xlsx', 'OUTAGE.xlsx'));
-  }
-  if (primaryUrl.includes('REVISITA_30D_202608_Norte.xlsx')) {
-    candidates.push(primaryUrl.replace('REVISITA_30D_202608_Norte.xlsx', 'REVISITA_30D_Norte.xlsx'));
-  }
-  if (primaryUrl.includes('REVISITA_30D_Norte.xlsx')) {
-    candidates.push(primaryUrl.replace('REVISITA_30D_Norte.xlsx', 'REVISITA_30D_Jul_Dez.xlsx'));
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/REVISITA_30D_Jul_Dez.xlsx');
-    candidates.push(primaryUrl.replace('REVISITA_30D_Norte.xlsx', 'REVISITA_30D_202608_Norte.xlsx'));
-  }
-  if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES/main/REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('/REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('./REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/REVISITA_30D_Jan_Jun.xlsx');
-    candidates.push(primaryUrl.replace('INDICADORES2', 'INDICADORES'));
-    candidates.push(primaryUrl.replace('REVISITA_30D_Jan_Jun', 'REVISITA_30D_JAN_JUN'));
-    candidates.push(primaryUrl.replace('REVISITA_30D_Jan_Jun', 'REVISITA_30D_Jan-Jun'));
-    candidates.push(primaryUrl.replace('REVISITA_30D_Jan_Jun', 'REVISITA_30D_Jan_a_Jun'));
-    candidates.push(primaryUrl.replace('.xlsx', '.xls'));
-  }
-  if (primaryUrl.includes('REVISITA_30D_Jul_Dez')) {
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/REVISITA_30D_Jul_Dez.xlsx');
-    candidates.push('/REVISITA_30D_Jul_Dez.xlsx');
-    candidates.push('./REVISITA_30D_Jul_Dez.xlsx');
-    candidates.push('REVISITA_30D_Jul_Dez.xlsx');
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES/main/REVISITA_30D_Jul_Dez.xlsx');
-    candidates.push(primaryUrl.replace('REVISITA_30D_Jul_Dez', 'REVISITA_30D_JUL_DEZ'));
-    candidates.push(primaryUrl.replace('REVISITA_30D_Jul_Dez', 'REVISITA_30D_Jul-Dez'));
-    candidates.push(primaryUrl.replace('REVISITA_30D_Jul_Dez', 'REVISITA_30D_Jul_a_Dez'));
-    candidates.push(primaryUrl.replace('.xlsx', '.xls'));
-  }
-  if (primaryUrl.includes('QOE_GPON') || primaryUrl.includes('qoe_gpon') || primaryUrl.includes('QOE')) {
-    candidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES2/main/QOE_GPON_NORTE.xlsx');
-    candidates.push('/QOE_GPON_NORTE.xlsx');
-    candidates.push(primaryUrl.replace('QOE_GPON.xlsx', 'QOE_GPON_NORTE.xlsx'));
-    candidates.push(primaryUrl.replace('QOE_GPON_NORTE.xlsx', 'QOE_GPON.xlsx'));
-    candidates.push(primaryUrl.replace('QOE_GPON.xlsx', 'QOE_GPON.XLSX'));
-    candidates.push(primaryUrl.replace('QOE_GPON.xlsx', 'QOE%20GPON.xlsx'));
-    candidates.push(primaryUrl.replace('QOE_GPON.xlsx', 'BASE_QOE_GPON.xlsx'));
-    candidates.push(primaryUrl.replace('QOE_GPON.xlsx', 'DASH_QOE_GPON.xlsx'));
-    candidates.push(primaryUrl.replace('QOE_GPON.xlsx', 'qoe_gpon.xlsx'));
-    candidates.push(primaryUrl.replace('.xlsx', '.xls'));
-    candidates.push(primaryUrl.replace('.xlsx', '.csv'));
+    localFallbacks.push(`/${fileName}`);
+    localFallbacks.push(`./${fileName}`);
+    localFallbacks.push(fileName);
   }
 
   // Helper to ensure array buffer is real binary excel data, not an HTML error or empty JSON
@@ -209,13 +159,15 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     return true;
   };
 
-  // Remove duplicates
-  const uniqueCandidates = Array.from(new Set(candidates));
-  
-  // Try direct fetch first for all candidate URLs
-  for (const url of uniqueCandidates) {
+  const uniqueRemoteCandidates = Array.from(new Set(remoteCandidates.filter(u => u.startsWith('http://') || u.startsWith('https://'))));
+
+  // STEP 1: Attempt via server proxy FIRST.
+  // The backend server resolves the latest commit SHA, bypasses Fastly CDN cache, avoids browser CORS,
+  // and saves the fresh file to the server disk.
+  for (const url of uniqueRemoteCandidates) {
     try {
-      const res = await fetch(url);
+      const proxyUrl = `/api/proxy-github?url=${encodeURIComponent(url)}&_t=${Date.now()}`;
+      const res = await fetch(proxyUrl, { cache: 'no-cache' });
       if (res.ok) {
         const buf = await res.arrayBuffer();
         if (isValidExcelOrDataBuffer(buf)) {
@@ -223,18 +175,34 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
         }
       }
     } catch {
-      // Continue to next candidate / proxy
+      // Continue to next candidate / direct fetch
     }
   }
-  
-  // If direct fetch fails, attempt via server proxy endpoint
-  for (const url of uniqueCandidates) {
+
+  // STEP 2: Try direct browser fetch with cache-busting (for static hosting like Hostinger without Node server)
+  for (const url of uniqueRemoteCandidates) {
     try {
-      const proxyUrl = `/api/proxy-github?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl);
+      const fetchUrl = url.includes('?') ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
+      const res = await fetch(fetchUrl, { cache: 'no-cache' });
       if (res.ok) {
         const buf = await res.arrayBuffer();
         if (isValidExcelOrDataBuffer(buf)) {
+          return buf;
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  // STEP 3: Only if all remote attempts failed, try local fallback as last resort
+  for (const localUrl of localFallbacks) {
+    try {
+      const res = await fetch(localUrl, { cache: 'no-cache' });
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        if (isValidExcelOrDataBuffer(buf)) {
+          console.warn(`[githubSync] Usando arquivo local como fallback para ${fileName}`);
           return buf;
         }
       }
@@ -246,23 +214,128 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
   throw new Error(`Não foi possível baixar o arquivo do GitHub. Verifique a URL: ${primaryUrl}`);
 }
 
+export interface GithubRepoStatus {
+  repo: string;
+  branch: string;
+  latestCommit: {
+    sha: string;
+    fullSha: string;
+    message: string;
+    date: string;
+    author: string;
+  } | null;
+  files: Array<{
+    key: string;
+    fileName: string;
+    label: string;
+    existsLocally: boolean;
+    sizeBytes: number;
+    modifiedAt: string;
+    rawUrl: string;
+  }>;
+}
+
+export async function fetchGithubRepoStatus(): Promise<GithubRepoStatus | null> {
+  try {
+    const res = await fetch(`/api/github/status?_t=${Date.now()}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export async function triggerSyncAllGithubFiles(): Promise<{ success: boolean; commitSha?: string; results: any[] }> {
+  const res = await fetch(`/api/github/sync-all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!res.ok) {
+    throw new Error(`Erro ao sincronizar arquivos do GitHub (status ${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function uploadExcelFileToServer(file: File, githubToken?: string): Promise<{ success: boolean; message: string; pushedToGithub: boolean }> {
+  const arrayBuffer = await file.arrayBuffer();
+  // Convert arrayBuffer to base64 in chunks to avoid call stack overflow on large files
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.byteLength));
+    binary += String.fromCharCode.apply(null, chunk as any);
+  }
+  const fileBase64 = btoa(binary);
+
+  const res = await fetch('/api/github/upload-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fileName: file.name,
+      fileBase64,
+      githubToken
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Erro ao salvar arquivo no servidor (${res.status})`);
+  }
+
+  return await res.json();
+}
+
 export function getGithubAt1Url(): string {
   return normalizeGithubRawUrl(
-    getEnvValue('VITE_GITHUB_EXCEL_URL', ['VITE_GITHUB_AT1_URL', 'GITHUB_EXCEL', 'VITE_GITHUB_EXCEL', 'VITE_GITHUB_EXCEL_URL_1'], DEFAULT_GITHUB_URLS.at1)
+    getEnvValue(
+      'VITE_GITHUB_AT1',
+      [
+        'VITE_GITHUB_AT1_URL',
+        'VITE_GITHUB_EXCEL_URL',
+        'VITE_GITHUB_EXCEL',
+        'GITHUB_AT1',
+        'GITHUB_AT1_URL',
+        'GITHUB_EXCEL',
+        'VITE_GITHUB_EXCEL_URL_1'
+      ],
+      DEFAULT_GITHUB_URLS.at1
+    )
   );
 }
 
 export function getGithubOutageUrl(): string {
   return normalizeGithubRawUrl(
-    getEnvValue('VITE_GITHUB_OUTAGE_URL', ['VITE_GITHUB_EXCEL_OUTAGE', 'GITHUB_EXCEL_OUTAGE', 'GITHUB_OUTAGE_URL', 'VITE_GITHUB_EXCEL_URL_2'], DEFAULT_GITHUB_URLS.outage)
+    getEnvValue(
+      'VITE_GITHUB_OUTAGE',
+      [
+        'VITE_GITHUB_OUTAGE_URL',
+        'VITE_GITHUB_EXCEL_OUTAGE',
+        'GITHUB_OUTAGE',
+        'GITHUB_OUTAGE_URL',
+        'GITHUB_EXCEL_OUTAGE',
+        'VITE_GITHUB_EXCEL_URL_2'
+      ],
+      DEFAULT_GITHUB_URLS.outage
+    )
   );
 }
 
 export function getGithubRevisitaUrl(): string {
   return normalizeGithubRawUrl(
     getEnvValue(
-      'VITE_GITHUB_REVISITA_URL',
-      ['VITE_GITHUB_EXCEL_REVISITA', 'GITHUB_EXCEL_REVISITA', 'GITHUB_REVISITA_URL', 'VITE_GITHUB_EXCEL_URL_3', 'VITE_GITHUB_EXCEL_REVISITA_URL'],
+      'VITE_GITHUB_REVISITA',
+      [
+        'VITE_GITHUB_REVISITA_URL',
+        'VITE_GITHUB_EXCEL_REVISITA',
+        'GITHUB_REVISITA',
+        'GITHUB_REVISITA_URL',
+        'GITHUB_EXCEL_REVISITA',
+        'VITE_GITHUB_EXCEL_URL_3',
+        'VITE_GITHUB_EXCEL_REVISITA_URL'
+      ],
       DEFAULT_GITHUB_URLS.revisita
     )
   );
@@ -271,8 +344,13 @@ export function getGithubRevisitaUrl(): string {
 export function getGithubRevisitaJanJunUrl(): string {
   return normalizeGithubRawUrl(
     getEnvValue(
-      'VITE_GITHUB_REVISITA_JAN_JUN_URL',
-      ['VITE_GITHUB_EXCEL_REVISITA_JAN_JUN', 'GITHUB_EXCEL_REVISITA_JAN_JUN', 'GITHUB_REVISITA_JAN_JUN', 'VITE_GITHUB_REVISITA_JAN_JUN'],
+      'VITE_GITHUB_REVISITA_JAN_JUN',
+      [
+        'VITE_GITHUB_REVISITA_JAN_JUN_URL',
+        'VITE_GITHUB_EXCEL_REVISITA_JAN_JUN',
+        'GITHUB_REVISITA_JAN_JUN',
+        'GITHUB_EXCEL_REVISITA_JAN_JUN'
+      ],
       DEFAULT_GITHUB_URLS.revisitaJanJun
     )
   );
@@ -281,8 +359,13 @@ export function getGithubRevisitaJanJunUrl(): string {
 export function getGithubRevisitaJulDezUrl(): string {
   return normalizeGithubRawUrl(
     getEnvValue(
-      'VITE_GITHUB_REVISITA_JUL_DEZ_URL',
-      ['VITE_GITHUB_EXCEL_REVISITA_JUL_DEZ', 'GITHUB_EXCEL_REVISITA_JUL_DEZ', 'GITHUB_REVISITA_JUL_DEZ', 'VITE_GITHUB_REVISITA_JUL_DEZ'],
+      'VITE_GITHUB_REVISITA_JUL_DEZ',
+      [
+        'VITE_GITHUB_REVISITA_JUL_DEZ_URL',
+        'VITE_GITHUB_EXCEL_REVISITA_JUL_DEZ',
+        'GITHUB_REVISITA_JUL_DEZ',
+        'GITHUB_EXCEL_REVISITA_JUL_DEZ'
+      ],
       DEFAULT_GITHUB_URLS.revisitaJulDez
     )
   );
@@ -291,8 +374,15 @@ export function getGithubRevisitaJulDezUrl(): string {
 export function getGithubAt5Url(): string {
   return normalizeGithubRawUrl(
     getEnvValue(
-      'VITE_GITHUB_EXCEL_URL_AT5',
-      ['VITE_GITHUB_AT5_URL', 'GITHUB_EXCEL_AT5', 'VITE_GITHUB_EXCEL_URL_5', 'GITHUB_AT5_URL'],
+      'VITE_GITHUB_AT5',
+      [
+        'VITE_GITHUB_AT5_URL',
+        'VITE_GITHUB_EXCEL_URL_AT5',
+        'GITHUB_AT5',
+        'GITHUB_AT5_URL',
+        'GITHUB_EXCEL_AT5',
+        'VITE_GITHUB_EXCEL_URL_5'
+      ],
       DEFAULT_GITHUB_URLS.at5
     )
   );
@@ -301,8 +391,15 @@ export function getGithubAt5Url(): string {
 export function getGithubQoeGponUrl(): string {
   return normalizeGithubRawUrl(
     getEnvValue(
-      'VITE_GITHUB_EXCEL_URL_QOE_GPON',
-      ['VITE_GITHUB_QOE_GPON_URL', 'GITHUB_EXCEL_QOE_GPON', 'GITHUB_QOE_GPON_URL', 'VITE_GITHUB_EXCEL_URL_QOE'],
+      'VITE_GITHUB_QOE_GPON',
+      [
+        'VITE_GITHUB_QOE_GPON_URL',
+        'VITE_GITHUB_EXCEL_URL_QOE_GPON',
+        'GITHUB_QOE_GPON',
+        'GITHUB_QOE_GPON_URL',
+        'GITHUB_EXCEL_QOE_GPON',
+        'VITE_GITHUB_EXCEL_URL_QOE'
+      ],
       DEFAULT_GITHUB_URLS.qoeGpon
     )
   );
