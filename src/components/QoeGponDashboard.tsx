@@ -109,12 +109,12 @@ export interface QoeGponDashboardProps {
 }
 
 export default function QoeGponDashboard({ initialData, onDataChange }: QoeGponDashboardProps) {
-  // State for dataset: by default initialize with sample GPON QOE data so initial screen immediately displays QOE GPON data
+  // State for dataset: empty by default on first access to prevent slow auto-loading
   const [data, setData] = useState<QoeGponRow[]>(() => {
     if (initialData && initialData.length > 0) return initialData;
-    return generateSampleQoeGponData();
+    return [];
   });
-  const [fileName, setFileName] = useState<string>('Base Padrão GPON QOE');
+  const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
   const cancelImportRef = useRef<boolean>(false);
@@ -1242,6 +1242,26 @@ export default function QoeGponDashboard({ initialData, onDataChange }: QoeGponD
       setImportProgress(0);
     }
   };
+
+  // Listen to cross-component sync from Central GitHub modal
+  useEffect(() => {
+    const handleSyncEvent = (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.buffer) {
+        try {
+          processWorkbookBuffer(detail.buffer, detail.fileName || 'QOE_GPON (GitHub)');
+          setExportSuccessMessage(`Sincronização de "${detail.fileName || 'QOE GPON'}" concluída!`);
+          setTimeout(() => setExportSuccessMessage(null), 5000);
+        } catch (err: any) {
+          setUploadError(`Erro ao carregar planilha: ${err.message}`);
+        }
+      } else {
+        handleGithubLoad();
+      }
+    };
+    window.addEventListener('app_qoe_sync_file', handleSyncEvent);
+    return () => window.removeEventListener('app_qoe_sync_file', handleSyncEvent);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

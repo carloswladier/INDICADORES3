@@ -28,7 +28,7 @@ import {
 interface GithubSyncManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDataUpdated?: (fileName?: string) => void;
+  onDataUpdated?: (fileName?: string, buffer?: ArrayBuffer) => void;
 }
 
 export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
@@ -115,13 +115,13 @@ export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
     setSyncingFile(fileName);
     setStatusMessage({ type: 'info', text: `Baixando versão mais recente de "${fileName}" do GitHub...` });
     try {
-      await fetchGithubFileArrayBuffer(rawUrl);
+      const buffer = await fetchGithubFileArrayBuffer(rawUrl);
       setStatusMessage({
         type: 'success',
         text: `Arquivo "${fileName}" sincronizado e atualizado com sucesso do GitHub!`
       });
       await loadStatus();
-      if (onDataUpdated) onDataUpdated(fileName);
+      if (onDataUpdated) onDataUpdated(fileName, buffer);
     } catch (err: any) {
       setStatusMessage({
         type: 'error',
@@ -161,7 +161,8 @@ export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
         text: res.message || `Arquivo "${targetName}" atualizado com sucesso!`
       });
       await loadStatus();
-      if (onDataUpdated) onDataUpdated(targetName);
+      const fileBuf = await uploadFile.arrayBuffer();
+      if (onDataUpdated) onDataUpdated(targetName, fileBuf);
     } catch (err: any) {
       setStatusMessage({
         type: 'error',
@@ -335,7 +336,7 @@ export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
               {(repoStatus?.files || [
                 { key: 'at1', fileName: 'DASH AT1 PERSONA_ATUALIZADO.xlsx', label: 'AT1 (Indicadores Técnicos & Persona)', existsLocally: true, sizeBytes: 10724379, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx' },
                 { key: 'outage', fileName: 'OUTAGE_SGO.xlsx', label: 'Outage SGO (Indisponibilidade)', existsLocally: true, sizeBytes: 8417467, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx' },
-                { key: 'revisitaJulDez', fileName: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)', existsLocally: true, sizeBytes: 10141542, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx' },
+                { key: 'revisitaJulDez', fileName: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)', existsLocally: true, sizeBytes: 10864734, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx' },
                 { key: 'revisitaJanJun', fileName: 'REVISITA_30D_Jan_Jun.xlsx', label: 'Revisita 30D (Janeiro a Junho)', existsLocally: true, sizeBytes: 24956931, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx' },
                 { key: 'qoeGpon', fileName: 'QOE_GPON_NORTE.xlsx', label: 'QOE GPON Norte', existsLocally: true, sizeBytes: 12213841, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx' },
                 { key: 'at5', fileName: 'AT5_NORTE.xlsx', label: 'AT5 Norte', existsLocally: false, sizeBytes: 0, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/AT5_NORTE.xlsx' }

@@ -2268,6 +2268,18 @@ export default function OutageDashboard({
     }
   };
 
+  // Listen to cross-component sync from Central GitHub modal
+  useEffect(() => {
+    const handleSyncEvent = (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.buffer) {
+        processExcelFile(detail.buffer);
+      }
+    };
+    window.addEventListener('app_outage_sync_file', handleSyncEvent);
+    return () => window.removeEventListener('app_outage_sync_file', handleSyncEvent);
+  }, []);
+
   // Export City Matrix Table to Excel
   const handleExportCityMatrixExcel = () => {
     const exportRows = cityMatrixData.rows.map(row => {

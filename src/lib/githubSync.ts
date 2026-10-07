@@ -1,9 +1,9 @@
 export const DEFAULT_GITHUB_URLS = {
   at1: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx",
   outage: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx",
-  revisita: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx",
+  revisita: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx",
   revisitaJanJun: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx",
-  revisitaJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx",
+  revisitaJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx",
   at5: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/AT5_NORTE.xlsx",
   qoeGpon: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx",
 };
@@ -165,6 +165,8 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx');
   }
   if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
+    // Commit d549372740ded87fa7e2847208066ddf95f55323 possui dados completos até Outubro (37.968 OS)
+    remoteCandidates.unshift('https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx');
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
   }
   if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {

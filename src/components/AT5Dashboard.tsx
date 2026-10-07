@@ -850,6 +850,18 @@ export default function AT5Dashboard({
     // Automatic loading disabled on mount; user loads manually via action buttons
   }, []);
 
+  // Listen to cross-component sync from Central GitHub modal
+  useEffect(() => {
+    const handleSyncEvent = (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.buffer) {
+        processExcelData(detail.buffer);
+      }
+    };
+    window.addEventListener('app_at5_sync_file', handleSyncEvent);
+    return () => window.removeEventListener('app_at5_sync_file', handleSyncEvent);
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {

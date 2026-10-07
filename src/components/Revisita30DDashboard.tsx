@@ -335,7 +335,7 @@ export default function Revisita30DDashboard() {
 
   const hasAutoLoadedRef = useRef(false);
 
-  // Clear legacy cache and auto-sync on mount
+  // Clear legacy cache on mount (auto-sync on mount disabled per user request)
   useEffect(() => {
     try {
       localStorage.removeItem('REVISITA_30D_DATA_V3');
@@ -349,11 +349,19 @@ export default function Revisita30DDashboard() {
     } catch (err) {
       // ignore
     }
+    // Auto-load disabled on initial access per user request; data loads when user clicks sync button
+  }, []);
 
-    if (!hasAutoLoadedRef.current && data.length === 0) {
-      hasAutoLoadedRef.current = true;
-      handleGithubSyncBoth();
-    }
+  // Listen to cross-component sync from Central GitHub modal or parent
+  useEffect(() => {
+    const handleSyncEvent = (e: any) => {
+      const detail = e.detail;
+      if (detail && detail.buffer) {
+        processExcelData(detail.buffer, detail.fileName || 'REVISITA_30D_Jul_Dez.xlsx');
+      }
+    };
+    window.addEventListener('app_revisita_sync_file', handleSyncEvent);
+    return () => window.removeEventListener('app_revisita_sync_file', handleSyncEvent);
   }, []);
 
   // Helper to deduplicate and merge two dataset arrays
@@ -684,13 +692,25 @@ export default function Revisita30DDashboard() {
       let finalData = parsed;
       setData(prev => {
         if (prev.length > 0 && fileName) {
-          const prevHasJan = prev.some(r => ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho'].includes(r.mes));
-          const prevHasJul = prev.some(r => ['Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].includes(r.mes));
-          const newHasJan = parsed.some(r => ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho'].includes(r.mes));
-          const newHasJul = parsed.some(r => ['Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].includes(r.mes));
-          if ((prevHasJan && newHasJul && !prevHasJul) || (prevHasJul && newHasJan && !prevHasJan)) {
-            finalData = mergeDatasets(prev, parsed);
-            return finalData;
+          const isJan = (m: string) => ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho'].includes(m);
+          const isJul = (m: string) => ['Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].includes(m);
+          const newHasJan = parsed.some(r => isJan(r.mes));
+          const newHasJul = parsed.some(r => isJul(r.mes));
+
+          if (newHasJul && !newHasJan) {
+            // Preserva semestre Jan-Jun se já existia na base
+            const existingJan = prev.filter(r => isJan(r.mes));
+            if (existingJan.length > 0) {
+              finalData = mergeDatasets(existingJan, parsed);
+              return finalData;
+            }
+          } else if (newHasJan && !newHasJul) {
+            // Preserva semestre Jul-Dez se já existia na base
+            const existingJul = prev.filter(r => isJul(r.mes));
+            if (existingJul.length > 0) {
+              finalData = mergeDatasets(parsed, existingJul);
+              return finalData;
+            }
           }
         }
         return parsed;
@@ -701,6 +721,10 @@ export default function Revisita30DDashboard() {
           return prev.some(f => f.includes(fileName)) ? prev : [...prev.filter(f => !f.includes('Base de Exemplo')), entry];
         });
       }
+      setSyncStatus({
+        type: 'success',
+        message: `Planilha "${fileName || 'Revisita 30D'}" carregada com sucesso (${formatInteger(parsed.length)} OS sincronizadas).`
+      });
       setError(null);
       setIsLoading(false);
       setImportProgress(100);
@@ -736,6 +760,156 @@ export default function Revisita30DDashboard() {
     multiple: true,
     noClick: true
   });
+
+  // Synchronize ONLY Jul_Dez (2º Semestre, incluindo Outubro) from GitHub
+  const handleGithubSyncJulDez = async (customJulDez?: string) => {
+    setIsImporting(true);
+    setIsGithubLoading(true);
+    setImportProgress(20);
+    setError(null);
+    setSyncStatus(null);
+
+    const urlJulDez = customJulDez || githubJulDezUrl.trim() || getGithubRevisitaJulDezUrl();
+    try {
+      setImportProgress(40);
+      const buffer = await fetchGithubFileArrayBuffer(urlJulDez);
+      setImportProgress(75);
+      const rows = parseExcelBuffer(buffer, 'REVISITA_30D_Jul_Dez.xlsx');
+      if (rows.length === 0) {
+        throw new Error('Nenhum registro encontrado na planilha REVISITA_30D_Jul_Dez.xlsx');
+      }
+
+      setData(prev => {
+        if (prev.length > 0) {
+          const prevJan = prev.filter(r => ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho'].includes(r.mes));
+          return prevJan.length > 0 ? mergeDatasets(prevJan, rows) : rows;
+        }
+        return rows;
+      });
+
+      const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS)`;
+      setLoadedFiles(prev => {
+        const withoutOld = prev.filter(f => !f.includes('Jul_Dez') && !f.includes('Base de Exemplo'));
+        return [...withoutOld, entry];
+      });
+
+      setSyncStatus({
+        type: 'success',
+        message: `Base Julho a Dezembro atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas, incluindo Outubro).`
+      });
+      setShowGithubInput(false);
+      setImportProgress(100);
+      setTimeout(() => setIsImporting(false), 400);
+    } catch (err: any) {
+      console.warn('[Revisita30D] Jul_Dez sync failed, trying local fallback...', err);
+      try {
+        const localRes = await fetch('/REVISITA_30D_Jul_Dez.xlsx');
+        if (localRes.ok) {
+          const buf = await localRes.arrayBuffer();
+          const rows = parseExcelBuffer(buf, 'REVISITA_30D_Jul_Dez.xlsx');
+          if (rows.length > 0) {
+            setData(prev => {
+              if (prev.length > 0) {
+                const prevJan = prev.filter(r => ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho'].includes(r.mes));
+                return prevJan.length > 0 ? mergeDatasets(prevJan, rows) : rows;
+              }
+              return rows;
+            });
+            const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS)`;
+            setLoadedFiles(prev => [...prev.filter(f => !f.includes('Jul_Dez') && !f.includes('Base de Exemplo')), entry]);
+            setSyncStatus({
+              type: 'success',
+              message: `Base Julho a Dezembro carregada via backup local (${formatInteger(rows.length)} OS).`
+            });
+            setImportProgress(100);
+            setTimeout(() => setIsImporting(false), 400);
+            return;
+          }
+        }
+      } catch {}
+      setError(`Erro ao sincronizar REVISITA_30D_Jul_Dez.xlsx: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+      setIsGithubLoading(false);
+      setImportProgress(100);
+      setTimeout(() => setIsImporting(false), 400);
+    }
+  };
+
+  // Synchronize ONLY Jan_Jun (1º Semestre) from GitHub
+  const handleGithubSyncJanJun = async (customJanJun?: string) => {
+    setIsImporting(true);
+    setIsGithubLoading(true);
+    setImportProgress(20);
+    setError(null);
+    setSyncStatus(null);
+
+    const urlJanJun = customJanJun || githubJanJunUrl.trim() || getGithubRevisitaJanJunUrl();
+    try {
+      setImportProgress(40);
+      const buffer = await fetchGithubFileArrayBuffer(urlJanJun);
+      setImportProgress(75);
+      const rows = parseExcelBuffer(buffer, 'REVISITA_30D_Jan_Jun.xlsx');
+      if (rows.length === 0) {
+        throw new Error('Nenhum registro encontrado na planilha REVISITA_30D_Jan_Jun.xlsx');
+      }
+
+      setData(prev => {
+        if (prev.length > 0) {
+          const prevJul = prev.filter(r => ['Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].includes(r.mes));
+          return prevJul.length > 0 ? mergeDatasets(rows, prevJul) : rows;
+        }
+        return rows;
+      });
+
+      const entry = `REVISITA_30D_Jan_Jun.xlsx (${formatInteger(rows.length)} OS)`;
+      setLoadedFiles(prev => {
+        const withoutOld = prev.filter(f => !f.includes('Jan_Jun') && !f.includes('Base de Exemplo'));
+        return [...withoutOld, entry];
+      });
+
+      setSyncStatus({
+        type: 'success',
+        message: `Base Janeiro a Junho atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas).`
+      });
+      setShowGithubInput(false);
+      setImportProgress(100);
+      setTimeout(() => setIsImporting(false), 400);
+    } catch (err: any) {
+      console.warn('[Revisita30D] Jan_Jun sync failed, trying local fallback...', err);
+      try {
+        const localRes = await fetch('/REVISITA_30D_Jan_Jun.xlsx');
+        if (localRes.ok) {
+          const buf = await localRes.arrayBuffer();
+          const rows = parseExcelBuffer(buf, 'REVISITA_30D_Jan_Jun.xlsx');
+          if (rows.length > 0) {
+            setData(prev => {
+              if (prev.length > 0) {
+                const prevJul = prev.filter(r => ['Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].includes(r.mes));
+                return prevJul.length > 0 ? mergeDatasets(rows, prevJul) : rows;
+              }
+              return rows;
+            });
+            const entry = `REVISITA_30D_Jan_Jun.xlsx (${formatInteger(rows.length)} OS)`;
+            setLoadedFiles(prev => [...prev.filter(f => !f.includes('Jan_Jun') && !f.includes('Base de Exemplo')), entry]);
+            setSyncStatus({
+              type: 'success',
+              message: `Base Janeiro a Junho carregada via backup local (${formatInteger(rows.length)} OS).`
+            });
+            setImportProgress(100);
+            setTimeout(() => setIsImporting(false), 400);
+            return;
+          }
+        }
+      } catch {}
+      setError(`Erro ao sincronizar REVISITA_30D_Jan_Jun.xlsx: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+      setIsGithubLoading(false);
+      setImportProgress(100);
+      setTimeout(() => setIsImporting(false), 400);
+    }
+  };
 
   // Synchronize both Jan_Jun and Jul_Dez files from GitHub (with fallback)
   const handleGithubSyncBoth = async (customJanJun?: string, customJulDez?: string) => {
@@ -1777,15 +1951,37 @@ export default function Revisita30DDashboard() {
               className="hidden" 
             />
 
-            {/* Sincronizar GitHub (Jan-Jun + Jul-Dez) */}
+            {/* Sincronizar Jul a Dez (Outubro incluso) */}
+            <button
+              onClick={() => handleGithubSyncJulDez()}
+              disabled={isGithubLoading}
+              className="flex items-center gap-1.5 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-3.5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+              title="Sincronizar apenas o 2º Semestre (Julho a Dezembro, com dados até Outubro)"
+            >
+              {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+              <span>Sincronizar Jul-Dez (Outubro)</span>
+            </button>
+
+            {/* Sincronizar Jan a Jun */}
+            <button
+              onClick={() => handleGithubSyncJanJun()}
+              disabled={isGithubLoading}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-sm active:scale-95 uppercase italic text-xs cursor-pointer"
+              title="Sincronizar apenas o 1º Semestre (Janeiro a Junho)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-300" />
+              <span>Jan-Jun</span>
+            </button>
+
+            {/* Sincronizar GitHub (Ambos os arquivos) */}
             <button
               onClick={() => handleGithubSyncBoth()}
               disabled={isGithubLoading}
-              className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
-              title="Sincronizar REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez do GitHub"
+              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
+              title="Sincronizar ambos os arquivos: REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez"
             >
-              {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-              <span>Sincronizar GitHub (2 Arquivos)</span>
+              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Ano Todo</span>
             </button>
 
             {/* Central GitHub & Upload */}
@@ -1985,20 +2181,44 @@ export default function Revisita30DDashboard() {
           <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed font-bold uppercase tracking-wider">
             Sincronize os arquivos REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez com o GitHub ou importe os arquivos Excel para visualizar os indicadores de repetição e retrabalho.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <button
+              onClick={() => handleGithubSyncJulDez()}
+              disabled={isGithubLoading}
+              className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+            >
+              {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+              <span>Sincronizar Jul-Dez (Outubro)</span>
+            </button>
+            <button
+              onClick={() => handleGithubSyncJanJun()}
+              disabled={isGithubLoading}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm active:scale-95 uppercase italic text-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-300" />
+              <span>Sincronizar Jan-Jun</span>
+            </button>
             <button
               onClick={() => handleGithubSyncBoth()}
-              className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 text-white font-black py-2.5 px-5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+              disabled={isGithubLoading}
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-800 font-bold py-2.5 px-4 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
             >
-              <Activity className="w-3.5 h-3.5" />
-              <span>Sincronizar GitHub (2 Arquivos)</span>
+              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Sincronizar Ambos (Jan-Dez)</span>
+            </button>
+            <button
+              onClick={() => setIsGithubModalOpen(true)}
+              className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md active:scale-95 uppercase italic text-xs cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-red-500" />
+              <span>Central GitHub</span>
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-black py-2.5 px-5 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-95 uppercase italic text-xs cursor-pointer"
+              className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-black py-2.5 px-4 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-95 uppercase italic text-xs cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5 text-[#EE1D23]" />
-              <span>Importar Excel (1 ou 2)</span>
+              <span>Importar Excel</span>
             </button>
           </div>
         </div>

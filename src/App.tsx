@@ -1108,7 +1108,7 @@ export default function App() {
   const [baseCidadeData, setBaseCidadeData] = useState<BaseCidadeData[]>([]);
   const [sharedOutageData, setSharedOutageData] = useState<OutageEvent[]>([]);
   const [sharedAt5Data, setSharedAt5Data] = useState<AT5Row[]>([]);
-  const [sharedQoeData, setSharedQoeData] = useState<QoeGponRow[]>(() => generateSampleQoeGponData());
+  const [sharedQoeData, setSharedQoeData] = useState<QoeGponRow[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
@@ -5515,9 +5515,26 @@ export default function App() {
         <GithubSyncManagerModal 
           isOpen={isGithubModalOpen}
           onClose={() => setIsGithubModalOpen(false)}
-          onDataUpdated={(fileName) => {
-            if (activeTab === 'dashboard') {
-              handleGithubLoad(getGithubAt1Url());
+          onDataUpdated={async (fileName, buffer) => {
+            if (!fileName) {
+              if (activeTab === 'dashboard') handleGithubLoad(getGithubAt1Url());
+              return;
+            }
+            const fnLower = fileName.toLowerCase();
+            if (fnLower.includes('dash') || fnLower.includes('at1') || fnLower.includes('persona')) {
+              if (buffer) {
+                processExcelData(buffer);
+              } else {
+                handleGithubLoad(getGithubAt1Url());
+              }
+            } else if (fnLower.includes('revisita')) {
+              window.dispatchEvent(new CustomEvent('app_revisita_sync_file', { detail: { fileName, buffer } }));
+            } else if (fnLower.includes('qoe')) {
+              window.dispatchEvent(new CustomEvent('app_qoe_sync_file', { detail: { fileName, buffer } }));
+            } else if (fnLower.includes('outage')) {
+              window.dispatchEvent(new CustomEvent('app_outage_sync_file', { detail: { fileName, buffer } }));
+            } else if (fnLower.includes('at5')) {
+              window.dispatchEvent(new CustomEvent('app_at5_sync_file', { detail: { fileName, buffer } }));
             }
           }}
         />
