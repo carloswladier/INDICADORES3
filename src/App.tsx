@@ -68,7 +68,7 @@ import { cn, formatPercent, formatDecimal, formatInteger } from './lib/utils';
 import { SingleMetricTooltip, ComparisonMetricTooltip } from './components/ChartCustomTooltip';
 import { logApi, LogEntry as ApiLogEntry } from './services/api';
 import { getDbConfig, setDbConfig } from './lib/database';
-import { getGithubAt1Url, normalizeGithubRawUrl, fetchGithubFileArrayBuffer } from './lib/githubSync';
+import { getGithubAt1Url, normalizeGithubRawUrl, fetchGithubFileArrayBuffer, uploadExcelFileToServer } from './lib/githubSync';
 import AT5Dashboard, { AT5Row } from './components/AT5Dashboard';
 import LOGDashboard from './components/LOGDashboard';
 import OutageDashboard, { OutageEvent } from './components/OutageDashboard';
@@ -2837,6 +2837,11 @@ export default function App() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Persist uploaded file to server storage if supported
+    try {
+      uploadExcelFileToServer(file).catch(err => console.warn('Servidor offline para persistência local:', err));
+    } catch {}
 
     setIsImporting(true);
     setImportProgress(0);

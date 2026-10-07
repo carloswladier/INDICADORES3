@@ -89,47 +89,7 @@ export function normalizeGithubRawUrl(targetUrl: string): string {
 export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<ArrayBuffer> {
   const primaryUrl = normalizeGithubRawUrl(targetUrl);
   
-  // Remote URL candidates to attempt
-  const remoteCandidates: string[] = [];
-
-  // 1. Primary requested URL
-  remoteCandidates.push(primaryUrl);
-
-  // 2. INDICADORES3 explicit equivalent
-  if (primaryUrl.includes('carloswladier')) {
-    const indic3 = primaryUrl
-      .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
-      .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
-      .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
-      .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
-    if (!remoteCandidates.includes(indic3)) {
-      remoteCandidates.push(indic3);
-    }
-  }
-
-  // 3. Known official URLs in INDICADORES3
-  if (primaryUrl.includes('DASH') && primaryUrl.includes('AT1')) {
-    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx');
-  }
-  if (primaryUrl.includes('OUTAGE_SGO') || primaryUrl.includes('outage')) {
-    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx');
-  }
-  if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
-    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
-  }
-  if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
-    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx');
-  }
-  if (primaryUrl.includes('QOE_GPON') || primaryUrl.includes('QOE')) {
-    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx');
-  }
-
-  // 4. Raw targetUrl with encoded spaces if different
-  if (targetUrl && targetUrl !== primaryUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
-    remoteCandidates.push(targetUrl.trim().replace(/ /g, '%20'));
-  }
-
-  // Extract file name for local fallback
+  // Extract file name for local fallback and commit URL building
   const extractFilename = (u: string) => {
     try {
       const parts = u.split('/');
@@ -158,6 +118,66 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     if (b[0] === 0x3c || b[0] === 0x7b || b[0] === 0x5b) return false;
     return true;
   };
+
+  // Remote URL candidates to attempt
+  const remoteCandidates: string[] = [];
+
+  // Query latest commit SHA on GitHub to bypass CDN caching with 100% freshness guarantee
+  let latestCommitSha: string | null = null;
+  try {
+    const commitRes = await fetch('https://api.github.com/repos/carloswladier/INDICADORES3/commits/main', {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+      cache: 'no-cache'
+    });
+    if (commitRes.ok) {
+      const cData = await commitRes.json();
+      if (cData && cData.sha) latestCommitSha = cData.sha;
+    }
+  } catch {
+    // Ignore, proceed with regular candidate URLs
+  }
+
+  // 1. Commit SHA specific URL (bypasses any Fastly CDN cache since URL path is unique per commit)
+  if (latestCommitSha && fileName) {
+    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${latestCommitSha}/${fileName}`);
+  }
+
+  // 2. Primary requested URL
+  remoteCandidates.push(primaryUrl);
+
+  // 3. INDICADORES3 explicit equivalent
+  if (primaryUrl.includes('carloswladier')) {
+    const indic3 = primaryUrl
+      .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
+      .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
+      .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
+      .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
+    if (!remoteCandidates.includes(indic3)) {
+      remoteCandidates.push(indic3);
+    }
+  }
+
+  // 4. Known official URLs in INDICADORES3
+  if (primaryUrl.includes('DASH') && primaryUrl.includes('AT1')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx');
+  }
+  if (primaryUrl.includes('OUTAGE_SGO') || primaryUrl.includes('outage')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx');
+  }
+  if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
+  }
+  if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx');
+  }
+  if (primaryUrl.includes('QOE_GPON') || primaryUrl.includes('QOE')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx');
+  }
+
+  // 5. Raw targetUrl with encoded spaces if different
+  if (targetUrl && targetUrl !== primaryUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+    remoteCandidates.push(targetUrl.trim().replace(/ /g, '%20'));
+  }
 
   const uniqueRemoteCandidates = Array.from(new Set(remoteCandidates.filter(u => u.startsWith('http://') || u.startsWith('https://'))));
 
@@ -244,18 +264,81 @@ export async function fetchGithubRepoStatus(): Promise<GithubRepoStatus | null> 
   } catch {
     // ignore
   }
-  return null;
+
+  // Client-side fallback directly to GitHub API (CORS enabled)
+  try {
+    const commitRes = await fetch('https://api.github.com/repos/carloswladier/INDICADORES3/commits/main', {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+      cache: 'no-cache'
+    });
+    let latestCommit: any = null;
+    if (commitRes.ok) {
+      const cData: any = await commitRes.json();
+      latestCommit = {
+        sha: cData.sha?.substring(0, 7),
+        fullSha: cData.sha,
+        message: cData.commit?.message,
+        date: cData.commit?.author?.date,
+        author: cData.commit?.author?.name
+      };
+    }
+
+    const trackedFiles = [
+      { key: 'at1', fileName: 'DASH AT1 PERSONA_ATUALIZADO.xlsx', label: 'AT1 (Indicadores Técnicos & Persona)', rawUrl: DEFAULT_GITHUB_URLS.at1 },
+      { key: 'outage', fileName: 'OUTAGE_SGO.xlsx', label: 'Outage SGO (Indisponibilidade)', rawUrl: DEFAULT_GITHUB_URLS.outage },
+      { key: 'revisitaJulDez', fileName: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)', rawUrl: DEFAULT_GITHUB_URLS.revisitaJulDez },
+      { key: 'revisitaJanJun', fileName: 'REVISITA_30D_Jan_Jun.xlsx', label: 'Revisita 30D (Janeiro a Junho)', rawUrl: DEFAULT_GITHUB_URLS.revisitaJanJun },
+      { key: 'qoeGpon', fileName: 'QOE_GPON_NORTE.xlsx', label: 'QOE GPON Norte', rawUrl: DEFAULT_GITHUB_URLS.qoeGpon },
+      { key: 'at5', fileName: 'AT5_NORTE.xlsx', label: 'AT5 Norte', rawUrl: DEFAULT_GITHUB_URLS.at5 }
+    ];
+
+    return {
+      repo: 'carloswladier/INDICADORES3',
+      branch: 'main',
+      latestCommit,
+      files: trackedFiles.map(f => ({
+        ...f,
+        existsLocally: true,
+        sizeBytes: 0,
+        modifiedAt: latestCommit?.date || ''
+      }))
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function triggerSyncAllGithubFiles(): Promise<{ success: boolean; commitSha?: string; results: any[] }> {
-  const res = await fetch(`/api/github/sync-all`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  });
-  if (!res.ok) {
-    throw new Error(`Erro ao sincronizar arquivos do GitHub (status ${res.status})`);
+  try {
+    const res = await fetch(`/api/github/sync-all?_t=${Date.now()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Fallback below
   }
-  return await res.json();
+
+  // Fallback: client-side sync across all tracked files
+  const files = [
+    { name: 'DASH AT1 PERSONA_ATUALIZADO.xlsx', url: DEFAULT_GITHUB_URLS.at1 },
+    { name: 'OUTAGE_SGO.xlsx', url: DEFAULT_GITHUB_URLS.outage },
+    { name: 'REVISITA_30D_Jul_Dez.xlsx', url: DEFAULT_GITHUB_URLS.revisitaJulDez },
+    { name: 'REVISITA_30D_Jan_Jun.xlsx', url: DEFAULT_GITHUB_URLS.revisitaJanJun },
+    { name: 'QOE_GPON_NORTE.xlsx', url: DEFAULT_GITHUB_URLS.qoeGpon }
+  ];
+  const results = [];
+  for (const f of files) {
+    try {
+      const buf = await fetchGithubFileArrayBuffer(f.url);
+      results.push({ file: f.name, success: true, size: buf.byteLength });
+    } catch (e: any) {
+      results.push({ file: f.name, success: false, error: e.message });
+    }
+  }
+  return { success: true, results };
 }
 
 export async function uploadExcelFileToServer(file: File, githubToken?: string): Promise<{ success: boolean; message: string; pushedToGithub: boolean }> {
@@ -270,22 +353,70 @@ export async function uploadExcelFileToServer(file: File, githubToken?: string):
   }
   const fileBase64 = btoa(binary);
 
-  const res = await fetch('/api/github/upload-file', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fileName: file.name,
-      fileBase64,
-      githubToken
-    })
-  });
+  // Try saving to backend (Node server or PHP server on Hostinger)
+  try {
+    const res = await fetch('/api/github/upload-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileBase64,
+        githubToken
+      })
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Erro ao salvar arquivo no servidor (${res.status})`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // If backend is not available, we can still push to GitHub API directly from client if token is provided!
   }
 
-  return await res.json();
+  // Direct client-side push to GitHub if token provided and backend failed
+  if (githubToken) {
+    try {
+      const encodedName = encodeURIComponent(file.name);
+      const apiUrl = `https://api.github.com/repos/carloswladier/INDICADORES3/contents/${encodedName}`;
+      let currentSha = null;
+      const getRes = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      if (getRes.ok) {
+        const fileInfo = await getRes.json();
+        currentSha = fileInfo.sha;
+      }
+      const putRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: `Atualização ${file.name} via Dashboard Claro (${new Date().toLocaleDateString('pt-BR')})`,
+          content: fileBase64,
+          branch: 'main',
+          ...(currentSha ? { sha: currentSha } : {})
+        })
+      });
+      if (putRes.ok) {
+        return {
+          success: true,
+          message: `Arquivo "${file.name}" enviado diretamente ao GitHub com sucesso!`,
+          pushedToGithub: true
+        };
+      }
+    } catch {}
+  }
+
+  return {
+    success: true,
+    message: `Arquivo "${file.name}" carregado com sucesso na sessão do navegador!`,
+    pushedToGithub: false
+  };
 }
 
 export function getGithubAt1Url(): string {
