@@ -175,7 +175,7 @@ if ($endpoint === 'proxy-github' || $action === 'proxy-github') {
     if (strpos($target, 'github.com') !== false && strpos($target, 'raw.githubusercontent.com') === false) {
         $target = str_replace(['github.com', '/blob/', '/raw/'], ['raw.githubusercontent.com', '/', '/'], $target);
     }
-    $target = str_replace('/refs/heads/', '/', $target);
+    $target = str_replace(['d549372740ded87fa7e2847208066ddf95f55323', '/refs/heads/'], ['main', '/'], $target);
     $target = str_replace(' ', '%20', $target);
 
     $urlPath = parse_url($target, PHP_URL_PATH);
@@ -184,11 +184,6 @@ if ($endpoint === 'proxy-github' || $action === 'proxy-github') {
     // Resolve commit SHA no GitHub para contornar qualquer cache estático ou CDN Fastly
     $commitSha = getLatestGithubCommitSha("carloswladier/INDICADORES3", "main");
     $urlsToTry = [];
-
-    // Prioriza o commit d549372740ded87fa7e2847208066ddf95f55323 que possui os dados atualizados de Outubro (37.968 OS)
-    if (strpos($target, 'REVISITA_30D_Jul_Dez') !== false) {
-        $urlsToTry[] = "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx";
-    }
 
     if (!empty($commitSha) && strpos($target, '/INDICADORES3/main/') !== false) {
         $urlsToTry[] = str_replace('/INDICADORES3/main/', "/INDICADORES3/{$commitSha}/", $target);
@@ -272,15 +267,14 @@ if ($endpoint === 'github-status') {
         ['key' => 'outage', 'name' => 'OUTAGE_SGO.xlsx', 'label' => 'Outage SGO (Indisponibilidade)'],
         ['key' => 'revisitaJulDez', 'name' => 'REVISITA_30D_Jul_Dez.xlsx', 'label' => 'Revisita 30D (Julho a Dezembro)'],
         ['key' => 'revisitaJanJun', 'name' => 'REVISITA_30D_Jan_Jun.xlsx', 'label' => 'Revisita 30D (Janeiro a Junho)'],
+        ['key' => 'revisitaGponJulDez', 'name' => 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx', 'label' => 'Revisita 30D GPON (REVISITA_30DXAT1_GPON_JUL_DEZ)'],
         ['key' => 'qoeGpon', 'name' => 'QOE_GPON_NORTE.xlsx', 'label' => 'QOE GPON Norte'],
         ['key' => 'at5', 'name' => 'AT5_NORTE.xlsx', 'label' => 'AT5 Norte']
     ];
     $filesInfo = [];
     foreach ($trackedFiles as $tf) {
         $lp = findLocalFilePath($tf['name']);
-        $rawUrl = ($tf['key'] === 'revisitaJulDez')
-            ? "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx"
-            : "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/" . rawurlencode($tf['name']);
+        $rawUrl = "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/" . rawurlencode($tf['name']);
         $filesInfo[] = [
             'key' => $tf['key'],
             'fileName' => $tf['name'],
@@ -308,14 +302,13 @@ if ($endpoint === 'github-sync-all') {
         'OUTAGE_SGO.xlsx',
         'REVISITA_30D_Jul_Dez.xlsx',
         'REVISITA_30D_Jan_Jun.xlsx',
+        'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx',
         'QOE_GPON_NORTE.xlsx'
     ];
     $commitSha = getLatestGithubCommitSha("carloswladier/INDICADORES3", "main");
     $results = [];
     foreach ($files as $fn) {
-        $url = ($fn === 'REVISITA_30D_Jul_Dez.xlsx')
-            ? "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx"
-            : "https://raw.githubusercontent.com/carloswladier/INDICADORES3/" . ($commitSha ?: "main") . "/" . rawurlencode($fn);
+        $url = "https://raw.githubusercontent.com/carloswladier/INDICADORES3/" . ($commitSha ?: "main") . "/" . rawurlencode($fn);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);

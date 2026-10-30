@@ -1,17 +1,19 @@
 export const DEFAULT_GITHUB_URLS = {
   at1: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx",
   outage: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx",
-  revisita: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx",
+  revisita: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx",
   revisitaJanJun: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx",
-  revisitaJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx",
+  revisitaJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx",
+  revisitaGponJulDez: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx",
   at5: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/AT5_NORTE.xlsx",
   qoeGpon: "https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx",
 };
 
-// Migrate deprecated repository URLs to current repository INDICADORES3
+// Migrate deprecated repository URLs and pinned commits to current repository INDICADORES3 main
 function migrateDeprecatedRepoUrl(url: string): string {
   if (!url) return '';
   return url
+    .replace('d549372740ded87fa7e2847208066ddf95f55323', 'main')
     .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
     .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
     .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
@@ -165,8 +167,6 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx');
   }
   if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
-    // Commit d549372740ded87fa7e2847208066ddf95f55323 possui dados completos até Outubro (37.968 OS)
-    remoteCandidates.unshift('https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx');
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
   }
   if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
@@ -290,6 +290,7 @@ export async function fetchGithubRepoStatus(): Promise<GithubRepoStatus | null> 
       { key: 'outage', fileName: 'OUTAGE_SGO.xlsx', label: 'Outage SGO (Indisponibilidade)', rawUrl: DEFAULT_GITHUB_URLS.outage },
       { key: 'revisitaJulDez', fileName: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)', rawUrl: DEFAULT_GITHUB_URLS.revisitaJulDez },
       { key: 'revisitaJanJun', fileName: 'REVISITA_30D_Jan_Jun.xlsx', label: 'Revisita 30D (Janeiro a Junho)', rawUrl: DEFAULT_GITHUB_URLS.revisitaJanJun },
+      { key: 'revisitaGponJulDez', fileName: 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx', label: 'Revisita 30D GPON (REVISITA_30DXAT1_GPON_JUL_DEZ)', rawUrl: DEFAULT_GITHUB_URLS.revisitaGponJulDez },
       { key: 'qoeGpon', fileName: 'QOE_GPON_NORTE.xlsx', label: 'QOE GPON Norte', rawUrl: DEFAULT_GITHUB_URLS.qoeGpon },
       { key: 'at5', fileName: 'AT5_NORTE.xlsx', label: 'AT5 Norte', rawUrl: DEFAULT_GITHUB_URLS.at5 }
     ];
@@ -329,6 +330,7 @@ export async function triggerSyncAllGithubFiles(): Promise<{ success: boolean; c
     { name: 'OUTAGE_SGO.xlsx', url: DEFAULT_GITHUB_URLS.outage },
     { name: 'REVISITA_30D_Jul_Dez.xlsx', url: DEFAULT_GITHUB_URLS.revisitaJulDez },
     { name: 'REVISITA_30D_Jan_Jun.xlsx', url: DEFAULT_GITHUB_URLS.revisitaJanJun },
+    { name: 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx', url: DEFAULT_GITHUB_URLS.revisitaGponJulDez },
     { name: 'QOE_GPON_NORTE.xlsx', url: DEFAULT_GITHUB_URLS.qoeGpon }
   ];
   const results = [];
@@ -534,6 +536,21 @@ export function getGithubQoeGponUrl(): string {
         'VITE_GITHUB_EXCEL_URL_QOE'
       ],
       DEFAULT_GITHUB_URLS.qoeGpon
+    )
+  );
+}
+
+export function getGithubRevisitaGponJulDezUrl(): string {
+  return normalizeGithubRawUrl(
+    getEnvValue(
+      'VITE_GITHUB_REVISITA_GPON_JUL_DEZ_URL',
+      [
+        'VITE_GITHUB_REVISITA_GPON_URL',
+        'GITHUB_REVISITA_GPON_JUL_DEZ',
+        'GITHUB_REVISITA_GPON',
+        'VITE_GITHUB_EXCEL_URL_REVISITA_GPON'
+      ],
+      DEFAULT_GITHUB_URLS.revisitaGponJulDez
     )
   );
 }

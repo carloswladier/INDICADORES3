@@ -122,6 +122,12 @@ export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
       });
       await loadStatus();
       if (onDataUpdated) onDataUpdated(fileName, buffer);
+      
+      if (fileName.includes('GPON') && fileName.includes('REVISITA')) {
+        window.dispatchEvent(new CustomEvent('app_revisita_gpon_sync_file', { detail: { fileName, buffer } }));
+      } else if (fileName.includes('REVISITA')) {
+        window.dispatchEvent(new CustomEvent('app_revisita_sync_file', { detail: { fileName, buffer } }));
+      }
     } catch (err: any) {
       setStatusMessage({
         type: 'error',
@@ -163,6 +169,12 @@ export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
       await loadStatus();
       const fileBuf = await uploadFile.arrayBuffer();
       if (onDataUpdated) onDataUpdated(targetName, fileBuf);
+
+      if (targetName.includes('GPON') && targetName.includes('REVISITA')) {
+        window.dispatchEvent(new CustomEvent('app_revisita_gpon_sync_file', { detail: { fileName: targetName, buffer: fileBuf } }));
+      } else if (targetName.includes('REVISITA')) {
+        window.dispatchEvent(new CustomEvent('app_revisita_sync_file', { detail: { fileName: targetName, buffer: fileBuf } }));
+      }
     } catch (err: any) {
       setStatusMessage({
         type: 'error',
@@ -336,8 +348,9 @@ export const GithubSyncManagerModal: React.FC<GithubSyncManagerModalProps> = ({
               {(repoStatus?.files || [
                 { key: 'at1', fileName: 'DASH AT1 PERSONA_ATUALIZADO.xlsx', label: 'AT1 (Indicadores Técnicos & Persona)', existsLocally: true, sizeBytes: 10724379, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx' },
                 { key: 'outage', fileName: 'OUTAGE_SGO.xlsx', label: 'Outage SGO (Indisponibilidade)', existsLocally: true, sizeBytes: 8417467, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/OUTAGE_SGO.xlsx' },
-                { key: 'revisitaJulDez', fileName: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)', existsLocally: true, sizeBytes: 10864734, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/d549372740ded87fa7e2847208066ddf95f55323/REVISITA_30D_Jul_Dez.xlsx' },
+                { key: 'revisitaJulDez', fileName: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)', existsLocally: true, sizeBytes: 15768214, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx' },
                 { key: 'revisitaJanJun', fileName: 'REVISITA_30D_Jan_Jun.xlsx', label: 'Revisita 30D (Janeiro a Junho)', existsLocally: true, sizeBytes: 24956931, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx' },
+                { key: 'revisitaGponJulDez', fileName: 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx', label: 'Revisita 30D GPON (REVISITA_30DXAT1_GPON_JUL_DEZ)', existsLocally: true, sizeBytes: 10864734, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx' },
                 { key: 'qoeGpon', fileName: 'QOE_GPON_NORTE.xlsx', label: 'QOE GPON Norte', existsLocally: true, sizeBytes: 12213841, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx' },
                 { key: 'at5', fileName: 'AT5_NORTE.xlsx', label: 'AT5 Norte', existsLocally: false, sizeBytes: 0, modifiedAt: '', rawUrl: 'https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/AT5_NORTE.xlsx' }
               ]).map((file) => {

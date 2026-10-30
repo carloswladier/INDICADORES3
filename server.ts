@@ -10,6 +10,9 @@ dotenv.config();
 // Pool cache to reuse connections where possible
 const poolsCache = new Map<string, Pool>();
 
+// In-memory cache for downloaded Excel spreadsheets to prevent heavy disk writes and snapshot bloat
+const excelMemoryCache = new Map<string, { buffer: Buffer; commitSha?: string; timestamp: number }>();
+
 interface DbConnectionParams {
   host?: string;
   user?: string;
@@ -358,6 +361,7 @@ async function startServer() {
       
       // Migrate legacy repositories to INDICADORES3
       target = target
+        .replace("d549372740ded87fa7e2847208066ddf95f55323", "main")
         .replace("/carloswladier/DASH_AT1_G1/", "/carloswladier/INDICADORES3/")
         .replace("/carloswladier/INDICADORES_MANUT/", "/carloswladier/INDICADORES3/")
         .replace("/carloswladier/INDICADORES2/", "/carloswladier/INDICADORES3/")
@@ -404,16 +408,21 @@ async function startServer() {
         });
       }
 
-      // If remote fetch failed, try serving from local public or root directory as fallback
+      // If remote fetch failed, check in-memory cache first, then public directory
       if (!response.ok && fileName) {
+        const memCached = excelMemoryCache.get(fileName);
+        if (memCached && memCached.buffer.length > 1000) {
+          res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          res.setHeader("X-Source", "memory-cache");
+          if (memCached.commitSha) res.setHeader("X-Github-Commit", memCached.commitSha);
+          return res.send(memCached.buffer);
+        }
         try {
           const localFilePath = path.join(process.cwd(), 'public', fileName);
-          const rootFilePath = path.join(process.cwd(), fileName);
-          const targetPath = fs.existsSync(localFilePath) ? localFilePath : (fs.existsSync(rootFilePath) ? rootFilePath : null);
-          if (targetPath && fs.statSync(targetPath).size > 1000) {
+          if (fs.existsSync(localFilePath) && fs.statSync(localFilePath).size > 1000) {
             res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             res.setHeader("X-Source", "local-fallback");
-            return res.sendFile(targetPath);
+            return res.sendFile(localFilePath);
           }
         } catch {}
       }
@@ -423,23 +432,18 @@ async function startServer() {
       }
 
       const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-      // Automatically sync and persist the downloaded file locally so both public and root remain fresh
+      // Store in memory cache to avoid blocking disk writes and snapshot payload bloat
       if (fileName && fileName.endsWith('.xlsx')) {
-        try {
-          const buffer = Buffer.from(arrayBuffer);
-          fs.writeFileSync(path.join(process.cwd(), 'public', fileName), buffer);
-          fs.writeFileSync(path.join(process.cwd(), fileName), buffer);
-        } catch (saveErr) {
-          console.warn("[proxy-github] Warning saving file locally:", saveErr);
-        }
+        excelMemoryCache.set(fileName, { buffer, commitSha: commitSha || undefined, timestamp: Date.now() });
       }
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
       if (commitSha) res.setHeader("X-Github-Commit", commitSha);
-      res.send(Buffer.from(arrayBuffer));
+      res.send(buffer);
     } catch (err: any) {
       console.error("Proxy GitHub error:", err);
       res.status(500).json({ error: err.message || "Erro ao baixar arquivo do GitHub via proxy" });
@@ -474,6 +478,7 @@ async function startServer() {
         { key: 'outage', name: 'OUTAGE_SGO.xlsx', label: 'Outage SGO (Indisponibilidade)' },
         { key: 'revisitaJulDez', name: 'REVISITA_30D_Jul_Dez.xlsx', label: 'Revisita 30D (Julho a Dezembro)' },
         { key: 'revisitaJanJun', name: 'REVISITA_30D_Jan_Jun.xlsx', label: 'Revisita 30D (Janeiro a Junho)' },
+        { key: 'revisitaGponJulDez', name: 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx', label: 'Revisita 30D GPON (REVISITA_30DXAT1_GPON_JUL_DEZ)' },
         { key: 'qoeGpon', name: 'QOE_GPON_NORTE.xlsx', label: 'QOE GPON Norte' },
         { key: 'at5', name: 'AT5_NORTE.xlsx', label: 'AT5 Norte' }
       ];
@@ -522,6 +527,7 @@ async function startServer() {
         'OUTAGE_SGO.xlsx',
         'REVISITA_30D_Jul_Dez.xlsx',
         'REVISITA_30D_Jan_Jun.xlsx',
+        'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx',
         'QOE_GPON_NORTE.xlsx'
       ];
 
@@ -543,7 +549,6 @@ async function startServer() {
           if (fetchRes.ok) {
             const buf = Buffer.from(await fetchRes.arrayBuffer());
             fs.writeFileSync(path.join(process.cwd(), 'public', fileName), buf);
-            fs.writeFileSync(path.join(process.cwd(), fileName), buf);
             results.push({ fileName, success: true, sizeBytes: buf.length, message: 'Sincronizado' });
           } else {
             results.push({ fileName, success: false, status: fetchRes.status, message: `Status ${fetchRes.status}` });

@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Large Excel data spreadsheets (fetched on-demand from GitHub API/raw)
+# Excluded from user snapshot to prevent AI Studio "Failed to create user snapshot" error
+*.xlsx
+*.xls
+

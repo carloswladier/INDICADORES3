@@ -21,6 +21,8 @@ export interface VisitData {
   tipoEquipamento?: string;
   modelo?: string;
   periodoAgenda?: string;
+  loginTecnico?: string; // WO_LOGIN_TEC
+  login?: string; // Alias WO_LOGIN_TEC
 }
 
 export interface BaseCidadeData {
@@ -30,16 +32,16 @@ export interface BaseCidadeData {
 }
 
 export const MOCK_DATA: VisitData[] = [
-  { id: '1', contrato: '003/0129841', mes: 'Janeiro', fullDate: new Date(2024, 0, 15), cidade: 'São Paulo', area: 'Norte', expurgo: false, tecnologia: 'HFC', status: 'Executada', notaAT1: 8.5, node: 'SP01', cdBaixa: 'B01', descriptionBaixa: 'REPARO CABO / CONECTOR', grupoBaixa: 'TÉCNICO', terminal: 'TERM-01', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'MODEM / EMTA', modelo: 'HUMAX HGB10R', periodoAgenda: 'MANHÃ (08:00 - 12:00)' },
-  { id: '2', contrato: '003/0145892', mes: 'Janeiro', fullDate: new Date(2024, 0, 16), cidade: 'Rio de Janeiro', area: 'Sul', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 9.2, node: 'RJ05', cdBaixa: 'B02', descriptionBaixa: 'INSTALAÇÃO FTTH CONCLUÍDA', grupoBaixa: 'CLIENTE', terminal: 'TERM-02', volume: 1, tipoOs: 'INSTALAÇÃO', tipoEquipamento: 'ONU GPON', modelo: 'HUAWEI HG8245H', periodoAgenda: 'TARDE (12:00 - 18:00)' },
-  { id: '3', contrato: '003/0198234', mes: 'Fevereiro', fullDate: new Date(2024, 1, 10), cidade: 'São Paulo', area: 'Leste', expurgo: true, tecnologia: 'HÍBRIDO', status: 'Cancelada', notaAT1: 0, node: 'SP03', cdBaixa: 'B03', descriptionBaixa: 'CLIENTE AUSENTE', grupoBaixa: 'INFRA', terminal: 'TERM-03', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'DECODER (STB)', modelo: 'SAGEMCOM DSI74', periodoAgenda: 'COMERCIAL (08:00 - 18:00)' },
-  { id: '4', contrato: '003/0201478', mes: 'Fevereiro', fullDate: new Date(2024, 1, 11), cidade: 'Belo Horizonte', area: 'Oeste', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 7.8, node: 'BH12', cdBaixa: 'B01', descriptionBaixa: 'MUDANÇA DE PONTO', grupoBaixa: 'TÉCNICO', terminal: 'TERM-04', volume: 1, tipoOs: 'MUDANÇA DE ENDEREÇO', tipoEquipamento: 'ROUTER MESH', modelo: 'TP-LINK DECO M4', periodoAgenda: 'MANHÃ (08:00 - 12:00)' },
-  { id: '5', contrato: '003/0215981', mes: 'Março', fullDate: new Date(2024, 2, 5), cidade: 'São Paulo', area: 'Sul', expurgo: false, tecnologia: 'HFC', status: 'Executada', notaAT1: 8.9, node: 'SP01', cdBaixa: 'B05', descriptionBaixa: 'SUBSTITUIÇÃO DE MODEM', grupoBaixa: 'TÉCNICO', terminal: 'TERM-01', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'MODEM / EMTA', modelo: 'SAGEMCOM FAST 3890', periodoAgenda: 'TARDE (12:00 - 18:00)' },
-  { id: '6', contrato: '003/0228490', mes: 'Março', fullDate: new Date(2024, 2, 6), cidade: 'Rio de Janeiro', area: 'Norte', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 9.5, node: 'RJ02', cdBaixa: 'B01', descriptionBaixa: 'INSTALAÇÃO GPON FIBRA', grupoBaixa: 'TÉCNICO', terminal: 'TERM-05', volume: 1, tipoOs: 'INSTALAÇÃO', tipoEquipamento: 'ONU GPON', modelo: 'ZTE F670', periodoAgenda: 'NOITE (18:00 - 21:00)' },
-  { id: '7', contrato: '003/0239102', mes: 'Janeiro', fullDate: new Date(2024, 0, 20), cidade: 'Belo Horizonte', area: 'Leste', expurgo: false, tecnologia: 'HÍBRIDO', status: 'Executada', notaAT1: 8.2, node: 'BH08', cdBaixa: 'B02', descriptionBaixa: 'TRANSFERÊNCIA DE TITULARIDADE', grupoBaixa: 'CLIENTE', terminal: 'TERM-06', volume: 1, tipoOs: 'TRANSFERÊNCIA', tipoEquipamento: 'DECODER (STB)', modelo: 'PACE DCR7121', periodoAgenda: 'MANHÃ (08:00 - 12:00)' },
-  { id: '8', contrato: '003/0248173', mes: 'Fevereiro', fullDate: new Date(2024, 1, 25), cidade: 'São Paulo', area: 'Sul', expurgo: false, tecnologia: 'HFC', status: 'Executada', notaAT1: 9.0, node: 'SP01', cdBaixa: 'B01', descriptionBaixa: 'NIVELAMENTO DE SINAL RF', grupoBaixa: 'TÉCNICO', terminal: 'TERM-01', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'MODEM / EMTA', modelo: 'ARRIS TG1692', periodoAgenda: 'TARDE (12:00 - 18:00)' },
-  { id: '9', contrato: '003/0259810', mes: 'Março', fullDate: new Date(2024, 2, 15), cidade: 'Rio de Janeiro', area: 'Oeste', expurgo: true, tecnologia: 'GPON', status: 'Cancelada', notaAT1: 0, node: 'RJ05', cdBaixa: 'B04', descriptionBaixa: 'CANCELAMENTO A PEDIDO DO CLIENTE', grupoBaixa: 'INFRA', terminal: 'TERM-02', volume: 1, tipoOs: 'DESCONEXÃO', tipoEquipamento: 'ONU GPON', modelo: 'HUAWEI HG8245H', periodoAgenda: 'MANHÃ (08:00 - 12:00)' },
-  { id: '10', contrato: '003/0268491', mes: 'Janeiro', fullDate: new Date(2024, 0, 5), cidade: 'São Paulo', area: 'Norte', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 8.7, node: 'SP02', cdBaixa: 'B01', descriptionBaixa: 'ATIVAÇÃO ONU GPON', grupoBaixa: 'TÉCNICO', terminal: 'TERM-07', volume: 1, tipoOs: 'INSTALAÇÃO', tipoEquipamento: 'ONU GPON', modelo: 'ZTE F670', periodoAgenda: 'TARDE (12:00 - 18:00)' },
+  { id: '1', contrato: '003/0129841', mes: 'Janeiro', fullDate: new Date(2024, 0, 15), cidade: 'São Paulo', area: 'Norte', expurgo: false, tecnologia: 'HFC', status: 'Executada', notaAT1: 8.5, node: 'SP01', cdBaixa: 'B01', descriptionBaixa: 'REPARO CABO / CONECTOR', grupoBaixa: 'TÉCNICO', terminal: 'TERM-01', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'MODEM / EMTA', modelo: 'HUMAX HGB10R', periodoAgenda: 'MANHÃ (08:00 - 12:00)', loginTecnico: 'TEC_SILVA', login: 'TEC_SILVA' },
+  { id: '2', contrato: '003/0145892', mes: 'Janeiro', fullDate: new Date(2024, 0, 16), cidade: 'Rio de Janeiro', area: 'Sul', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 9.2, node: 'RJ05', cdBaixa: 'B02', descriptionBaixa: 'INSTALAÇÃO FTTH CONCLUÍDA', grupoBaixa: 'CLIENTE', terminal: 'TERM-02', volume: 1, tipoOs: 'INSTALAÇÃO', tipoEquipamento: 'ONU GPON', modelo: 'HUAWEI HG8245H', periodoAgenda: 'TARDE (12:00 - 18:00)', loginTecnico: 'TEC_SOUZA', login: 'TEC_SOUZA' },
+  { id: '3', contrato: '003/0198234', mes: 'Fevereiro', fullDate: new Date(2024, 1, 10), cidade: 'São Paulo', area: 'Leste', expurgo: true, tecnologia: 'HÍBRIDO', status: 'Cancelada', notaAT1: 0, node: 'SP03', cdBaixa: 'B03', descriptionBaixa: 'CLIENTE AUSENTE', grupoBaixa: 'INFRA', terminal: 'TERM-03', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'DECODER (STB)', modelo: 'SAGEMCOM DSI74', periodoAgenda: 'COMERCIAL (08:00 - 18:00)', loginTecnico: 'TEC_LIMA', login: 'TEC_LIMA' },
+  { id: '4', contrato: '003/0201478', mes: 'Fevereiro', fullDate: new Date(2024, 1, 11), cidade: 'Belo Horizonte', area: 'Oeste', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 7.8, node: 'BH12', cdBaixa: 'B01', descriptionBaixa: 'MUDANÇA DE PONTO', grupoBaixa: 'TÉCNICO', terminal: 'TERM-04', volume: 1, tipoOs: 'MUDANÇA DE ENDEREÇO', tipoEquipamento: 'ROUTER MESH', modelo: 'TP-LINK DECO M4', periodoAgenda: 'MANHÃ (08:00 - 12:00)', loginTecnico: 'TEC_ALVES', login: 'TEC_ALVES' },
+  { id: '5', contrato: '003/0215981', mes: 'Março', fullDate: new Date(2024, 2, 5), cidade: 'São Paulo', area: 'Sul', expurgo: false, tecnologia: 'HFC', status: 'Executada', notaAT1: 8.9, node: 'SP01', cdBaixa: 'B05', descriptionBaixa: 'SUBSTITUIÇÃO DE MODEM', grupoBaixa: 'TÉCNICO', terminal: 'TERM-01', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'MODEM / EMTA', modelo: 'SAGEMCOM FAST 3890', periodoAgenda: 'TARDE (12:00 - 18:00)', loginTecnico: 'TEC_COSTA', login: 'TEC_COSTA' },
+  { id: '6', contrato: '003/0228490', mes: 'Março', fullDate: new Date(2024, 2, 6), cidade: 'Rio de Janeiro', area: 'Norte', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 9.5, node: 'RJ02', cdBaixa: 'B01', descriptionBaixa: 'INSTALAÇÃO GPON FIBRA', grupoBaixa: 'TÉCNICO', terminal: 'TERM-05', volume: 1, tipoOs: 'INSTALAÇÃO', tipoEquipamento: 'ONU GPON', modelo: 'ZTE F670', periodoAgenda: 'NOITE (18:00 - 21:00)', loginTecnico: 'TEC_SANTOS', login: 'TEC_SANTOS' },
+  { id: '7', contrato: '003/0239102', mes: 'Janeiro', fullDate: new Date(2024, 0, 20), cidade: 'Belo Horizonte', area: 'Leste', expurgo: false, tecnologia: 'HÍBRIDO', status: 'Executada', notaAT1: 8.2, node: 'BH08', cdBaixa: 'B02', descriptionBaixa: 'TRANSFERÊNCIA DE TITULARIDADE', grupoBaixa: 'CLIENTE', terminal: 'TERM-06', volume: 1, tipoOs: 'TRANSFERÊNCIA', tipoEquipamento: 'DECODER (STB)', modelo: 'PACE DCR7121', periodoAgenda: 'MANHÃ (08:00 - 12:00)', loginTecnico: 'TEC_OLIVEIRA', login: 'TEC_OLIVEIRA' },
+  { id: '8', contrato: '003/0248173', mes: 'Fevereiro', fullDate: new Date(2024, 1, 25), cidade: 'São Paulo', area: 'Sul', expurgo: false, tecnologia: 'HFC', status: 'Executada', notaAT1: 9.0, node: 'SP01', cdBaixa: 'B01', descriptionBaixa: 'NIVELAMENTO DE SINAL RF', grupoBaixa: 'TÉCNICO', terminal: 'TERM-01', volume: 1, tipoOs: 'REPARO', tipoEquipamento: 'MODEM / EMTA', modelo: 'ARRIS TG1692', periodoAgenda: 'TARDE (12:00 - 18:00)', loginTecnico: 'TEC_PEREIRA', login: 'TEC_PEREIRA' },
+  { id: '9', contrato: '003/0259810', mes: 'Março', fullDate: new Date(2024, 2, 15), cidade: 'Rio de Janeiro', area: 'Oeste', expurgo: true, tecnologia: 'GPON', status: 'Cancelada', notaAT1: 0, node: 'RJ05', cdBaixa: 'B04', descriptionBaixa: 'CANCELAMENTO A PEDIDO DO CLIENTE', grupoBaixa: 'INFRA', terminal: 'TERM-02', volume: 1, tipoOs: 'DESCONEXÃO', tipoEquipamento: 'ONU GPON', modelo: 'HUAWEI HG8245H', periodoAgenda: 'MANHÃ (08:00 - 12:00)', loginTecnico: 'TEC_ROCHA', login: 'TEC_ROCHA' },
+  { id: '10', contrato: '003/0268491', mes: 'Janeiro', fullDate: new Date(2024, 0, 5), cidade: 'São Paulo', area: 'Norte', expurgo: false, tecnologia: 'GPON', status: 'Executada', notaAT1: 8.7, node: 'SP02', cdBaixa: 'B01', descriptionBaixa: 'ATIVAÇÃO ONU GPON', grupoBaixa: 'TÉCNICO', terminal: 'TERM-07', volume: 1, tipoOs: 'INSTALAÇÃO', tipoEquipamento: 'ONU GPON', modelo: 'ZTE F670', periodoAgenda: 'TARDE (12:00 - 18:00)', loginTecnico: 'TEC_MARTINS', login: 'TEC_MARTINS' },
   // Add more data to make it look real
   ...Array.from({ length: 40 }).map((_, i) => {
     const monthIdx = Math.floor(Math.random() * 3);
@@ -56,6 +58,7 @@ export const MOCK_DATA: VisitData[] = [
     const equipTypes = ['MODEM / EMTA', 'ONU GPON', 'DECODER (STB)', 'ROUTER MESH'];
     const modelos = ['HUMAX HGB10R', 'SAGEMCOM FAST 3890', 'HUAWEI HG8245H', 'ZTE F670', 'TP-LINK DECO M4', 'ARRIS TG1692'];
     const janelas = ['MANHÃ (08:00 - 12:00)', 'TARDE (12:00 - 18:00)', 'NOITE (18:00 - 21:00)', 'COMERCIAL (08:00 - 18:00)'];
+    const sampleLogins = ['TEC_SILVA', 'TEC_SOUZA', 'TEC_LIMA', 'TEC_ALVES', 'TEC_COSTA', 'TEC_SANTOS', 'TEC_OLIVEIRA', 'TEC_PEREIRA', 'TEC_ROCHA', 'TEC_MARTINS', 'TEC_FERREIRA', 'TEC_GOMES'];
 
     return {
       id: `extra-${i}`,
@@ -77,7 +80,9 @@ export const MOCK_DATA: VisitData[] = [
       tipoOs: tipos[i % tipos.length],
       tipoEquipamento: equipTypes[i % equipTypes.length],
       modelo: modelos[i % modelos.length],
-      periodoAgenda: janelas[i % janelas.length]
+      periodoAgenda: janelas[i % janelas.length],
+      loginTecnico: sampleLogins[i % sampleLogins.length],
+      login: sampleLogins[i % sampleLogins.length]
     };
   })
 ];

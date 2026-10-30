@@ -63,6 +63,7 @@ import {
   getGithubRevisitaUrl, 
   getGithubRevisitaJanJunUrl, 
   getGithubRevisitaJulDezUrl, 
+  getGithubRevisitaGponJulDezUrl,
   normalizeGithubRawUrl, 
   fetchGithubFileArrayBuffer 
 } from '../lib/githubSync';
@@ -269,7 +270,11 @@ const INITIAL_MOCK_REVISITA = generateMockRevisita30DData();
 
 const COLORS_SERIES = ['#EE1D23', '#333333', '#475569', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899'];
 
-export default function Revisita30DDashboard() {
+export interface Revisita30DDashboardProps {
+  isGpon?: boolean;
+}
+
+export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDashboardProps = {}) {
   const [data, setData] = useState<Revisita30DRow[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -281,9 +286,10 @@ export default function Revisita30DDashboard() {
   const [loadedFiles, setLoadedFiles] = useState<string[]>([]);
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; message: string } | null>(null);
 
-  // GitHub loader states (supports both Jan-Jun and Jul-Dez)
+  // GitHub loader states (supports Jan-Jun, Jul-Dez and GPON)
   const [githubJanJunUrl, setGithubJanJunUrl] = useState('');
   const [githubJulDezUrl, setGithubJulDezUrl] = useState('');
+  const [githubGponUrl, setGithubGponUrl] = useState('');
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [showGithubInput, setShowGithubInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -297,6 +303,7 @@ export default function Revisita30DDashboard() {
     unidadeNegocio: string[];
     padraoOs: string[]; // '0', '1'
     codigoBaixa: string[];
+    loginTecnico: string[]; // WO_LOGIN_TEC
     startDate: string;
     endDate: string;
   }>({
@@ -307,6 +314,7 @@ export default function Revisita30DDashboard() {
     unidadeNegocio: [],
     padraoOs: [],
     codigoBaixa: [],
+    loginTecnico: [],
     startDate: '',
     endDate: ''
   });
@@ -334,16 +342,23 @@ export default function Revisita30DDashboard() {
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
 
   const hasAutoLoadedRef = useRef(false);
+  const lastParsedSheetRef = useRef<string>('');
 
   // Clear legacy cache on mount (auto-sync on mount disabled per user request)
   useEffect(() => {
     try {
       localStorage.removeItem('REVISITA_30D_DATA_V3');
-      // Migrate any legacy local storage pointing to INDICADORES or INDICADORES2 to INDICADORES3
-      ['VITE_GITHUB_REVISITA_JAN_JUN_URL', 'GITHUB_REVISITA_JAN_JUN', 'VITE_GITHUB_REVISITA_JUL_DEZ_URL', 'GITHUB_REVISITA_JUL_DEZ', 'VITE_GITHUB_REVISITA_URL'].forEach(key => {
+      // Migrate any legacy local storage pointing to INDICADORES, INDICADORES2, or old commit hash
+      ['VITE_GITHUB_REVISITA_JAN_JUN_URL', 'GITHUB_REVISITA_JAN_JUN', 'VITE_GITHUB_REVISITA_JUL_DEZ_URL', 'GITHUB_REVISITA_JUL_DEZ', 'VITE_GITHUB_REVISITA_URL', 'VITE_GITHUB_REVISITA_GPON_JUL_DEZ_URL', 'GITHUB_REVISITA_GPON_JUL_DEZ'].forEach(key => {
         const val = localStorage.getItem(key);
-        if (val && (val.includes('/INDICADORES/') || val.includes('/INDICADORES2/'))) {
-          localStorage.setItem(key, val.replace('/INDICADORES2/', '/INDICADORES3/').replace('/INDICADORES/', '/INDICADORES3/'));
+        if (val) {
+          let updated = val;
+          if (updated.includes('/INDICADORES2/')) updated = updated.replace('/INDICADORES2/', '/INDICADORES3/');
+          if (updated.includes('/INDICADORES/')) updated = updated.replace('/INDICADORES/', '/INDICADORES3/');
+          if (updated.includes('d549372740ded87fa7e2847208066ddf95f55323')) updated = updated.replace('d549372740ded87fa7e2847208066ddf95f55323', 'main');
+          if (updated !== val) {
+            localStorage.setItem(key, updated);
+          }
         }
       });
     } catch (err) {
@@ -357,12 +372,22 @@ export default function Revisita30DDashboard() {
     const handleSyncEvent = (e: any) => {
       const detail = e.detail;
       if (detail && detail.buffer) {
-        processExcelData(detail.buffer, detail.fileName || 'REVISITA_30D_Jul_Dez.xlsx');
+        const fName = String(detail.fileName || '');
+        if (isGpon) {
+          if (fName.includes('GPON') || fName.includes('REVISITA_30DXAT1_GPON') || !fName) {
+            processExcelData(detail.buffer, detail.fileName || 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
+          }
+        } else {
+          if (!fName.includes('GPON')) {
+            processExcelData(detail.buffer, detail.fileName || 'REVISITA_30D_Jul_Dez.xlsx');
+          }
+        }
       }
     };
-    window.addEventListener('app_revisita_sync_file', handleSyncEvent);
-    return () => window.removeEventListener('app_revisita_sync_file', handleSyncEvent);
-  }, []);
+    const eventName = isGpon ? 'app_revisita_gpon_sync_file' : 'app_revisita_sync_file';
+    window.addEventListener(eventName, handleSyncEvent);
+    return () => window.removeEventListener(eventName, handleSyncEvent);
+  }, [isGpon]);
 
   // Helper to deduplicate and merge two dataset arrays
   const mergeDatasets = (base: Revisita30DRow[], incoming: Revisita30DRow[]): Revisita30DRow[] => {
@@ -386,16 +411,61 @@ export default function Revisita30DDashboard() {
       throw new Error('Nenhuma planilha encontrada no arquivo.');
     }
 
-    // 1. Select the best worksheet by scoring headers across all sheets
+    // 1. Select the best worksheet by scoring headers across candidate sheets
     let targetSheetName = wb.SheetNames[0];
     let highestScore = -1;
     let headerRowIndex = 0;
 
-    for (const sheetName of wb.SheetNames) {
+    let candidateSheets = [...wb.SheetNames];
+
+    // Prioridade absoluta para a aba REVISITA_GPON no módulo GPON conforme solicitado
+    if (isGpon) {
+      const explicitGpon = wb.SheetNames.find(s => {
+        const clean = s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+        return clean === 'REVISITAGPON' || (clean.includes('REVISITA') && clean.includes('GPON'));
+      }) || wb.SheetNames.find(s => {
+        const clean = s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+        return clean.includes('GPON') && !clean.includes('QOE');
+      });
+      if (explicitGpon) {
+        targetSheetName = explicitGpon;
+        candidateSheets = [explicitGpon]; // Isola exclusivamente a aba REVISITA_GPON solicitada
+      }
+    } else {
+      // No módulo convencional (HFC / Geral), prioriza abas não-GPON para evitar contaminação
+      const nonGpon = wb.SheetNames.filter(s => {
+        const clean = s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+        return !clean.includes('GPON');
+      });
+      if (nonGpon.length > 0) {
+        candidateSheets = nonGpon;
+        targetSheetName = nonGpon[0];
+      }
+    }
+
+    for (const sheetName of candidateSheets) {
       const wsTest = wb.Sheets[sheetName];
       if (!wsTest) continue;
       const matrix = XLSX.utils.sheet_to_json(wsTest, { header: 1, defval: '' }) as any[][];
       if (!matrix || matrix.length === 0) continue;
+
+      const normSheet = sheetName.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+      let sheetBonus = 0;
+      if (isGpon) {
+        if (normSheet === 'REVISITAGPON' || (normSheet.includes('REVISITA') && normSheet.includes('GPON'))) {
+          sheetBonus += 500;
+        } else if (normSheet.includes('GPON') && !normSheet.includes('QOE')) {
+          sheetBonus += 250;
+        } else if (normSheet === 'REVISITA' || normSheet === 'AT1') {
+          sheetBonus -= 200;
+        }
+      } else {
+        if (normSheet.includes('GPON')) {
+          sheetBonus -= 200;
+        } else if (normSheet.includes('REVISITA30D') || normSheet === 'REVISITA' || normSheet === 'OUTUBRO') {
+          sheetBonus += 50;
+        }
+      }
 
       for (let r = 0; r < Math.min(15, matrix.length); r++) {
         const rowArr = matrix[r];
@@ -409,11 +479,11 @@ export default function Revisita30DDashboard() {
             .replace(/[^A-Z0-9]/g, '')
         );
 
-        let score = 0;
+        let score = sheetBonus;
         if (normalizedCols.includes('ESTRMUNICIPIO')) score += 15;
         if (normalizedCols.includes('NMEMPRESANEW') || normalizedCols.includes('ANTNMEMPRESANEW')) score += 15;
         if (normalizedCols.includes('NMUNNEW')) score += 15;
-        if (normalizedCols.includes('NRCONTRATO')) score += 15;
+        if (normalizedCols.includes('NRCONTRATO') || normalizedCols.includes('NRCONTRATO2')) score += 15;
         if (normalizedCols.includes('QTDREVISITAS') || normalizedCols.includes('QTDREVISITA')) score += 15;
         if (normalizedCols.includes('WOTPATIVIDADE')) score += 8;
         if (normalizedCols.includes('WOLOGINTEC')) score += 8;
@@ -423,7 +493,7 @@ export default function Revisita30DDashboard() {
 
         if (normalizedCols.includes('MUNICIPIO') || normalizedCols.includes('CIDADE')) score += 6;
         if (normalizedCols.includes('EMPRESA') || normalizedCols.includes('PARCEIRO')) score += 6;
-        if (normalizedCols.includes('CONTRATO') || normalizedCols.includes('OS')) score += 6;
+        if (normalizedCols.includes('CONTRATO') || normalizedCols.includes('OS') || normalizedCols.includes('CONTRATO2')) score += 6;
         if (normalizedCols.includes('REVISITAS') || normalizedCols.includes('REVISITA')) score += 6;
         if (normalizedCols.includes('MES') || normalizedCols.includes('MESES') || normalizedCols.includes('MONTH')) score += 6;
 
@@ -434,6 +504,8 @@ export default function Revisita30DDashboard() {
         }
       }
     }
+
+    lastParsedSheetRef.current = targetSheetName;
 
     const ws = wb.Sheets[targetSheetName];
     const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
@@ -492,8 +564,18 @@ export default function Revisita30DDashboard() {
     const idxMunicipio = findColIdx(['ESTR_MUNICIPIO', 'ESTRMUNICIPIO', 'ESTR_MUNICÍPIO', 'NM_MUNICIPIO', 'MUNICIPIO', 'MUNICÍPIO', 'CIDADE', 'ESTR_CIDADE']);
     const idxEmpresa = findColIdx(['NM_EMPRESA_NEW', 'NMEMPRESANEW', 'ANT_NM_EMPRESA_NEW', 'ANTNMEMPRESANEW', 'EMPRESA_NEW', 'NM_EMPRESA', 'NMEMPRESA', 'ANT_EMPRESA', 'EMPRESA', 'PARCEIRO', 'CONTRATADA']);
     const idxUn = findColIdx(['NM_UN_NEW', 'NMUNNEW', 'UNIDADE_NEGOCIO', 'UNIDADENEGOCIO', 'UNIDADE_NEGÓCIO', 'NM_UN', 'NMUN', 'UN_NEW', 'REGIONAL', 'UNIDADE']);
-    const idxContrato = findColIdx(['NR_CONTRATO', 'NRCONTRATO', 'NUM_CONTRATO', 'NUMCONTRATO', 'NUMERO_CONTRATO', 'CONTRATO', 'NR_OS', 'NROS', 'NUM_OS', 'NUMOS', 'OS', 'WO_NUMBER', 'ID_OS']);
-    const idxRevisitas = findColIdx(['QTD_REVISITAS', 'QTDREVISITAS', 'QTD_REVISITA', 'QTDREVISITA', 'QT_REVISITAS', 'REVISITAS', 'REVISITA', 'SEM_PADRAO', 'IS_REVISITA', 'FLAG_REVISITA']);
+    const idxContrato = findColIdx([
+      'NR_CONTRATO', 'NRCONTRATO', 
+      'NR_CONTRATO_2', 'NRCONTRATO2', 'NR_CONTRATO2',
+      'CONTRATO_2', 'CONTRATO2', 'CONTRATO', 
+      'NUM_CONTRATO', 'NUMCONTRATO', 'NUMERO_CONTRATO', 
+      'NR_OS', 'NROS', 'NUM_OS', 'NUMOS', 'OS', 'WO_NUMBER', 'ID_OS'
+    ]);
+    const idxRevisitas = findColIdx([
+      'QTD_REVISITAS', 'QTDREVISITAS', 'QTD_REVISITA', 'QTDREVISITA', 
+      'QT_REVISITAS', 'REVISITAS', 'REVISITA', 'SEM_PADRAO', 'IS_REVISITA', 'FLAG_REVISITA',
+      'REVISITA_30D', 'QTD_REVISITAS_30D', 'QTD_REVISITA_30D'
+    ]);
     const idxTipoOs = findColIdx(['WO_TP_ATIVIDADE', 'WOTPATIVIDADE', 'TP_ATIVIDADE', 'TIPO_OS', 'TIPOOS', 'TIPO_ATIVIDADE', 'WO_TIPO', 'TIPO', 'SERVICO', 'ATIVIDADE']);
     const idxLoginTec = findColIdx(['WO_LOGIN_TEC', 'WOLOGINTEC', 'LOGIN_TEC', 'LOGINTEC', 'LOGIN_TECNICO', 'NM_TECNICO', 'TECNICO', 'LOGIN', 'MATRICULA', 'WO_TEC']);
     const idxBaixa = findColIdx(['CD_BAIXA_ORDEM_SERVICO', 'CDBAIXAORDEMSERVICO', 'CODIGO_BAIXA', 'CODIGOBAIXA', 'CD_BAIXA', 'CDBAIXA', 'DS_BAIXA', 'MOTIVO_BAIXA', 'BAIXA']);
@@ -787,7 +869,7 @@ export default function Revisita30DDashboard() {
         return rows;
       });
 
-      const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS)`;
+      const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS até 28/10)`;
       setLoadedFiles(prev => {
         const withoutOld = prev.filter(f => !f.includes('Jul_Dez') && !f.includes('Base de Exemplo'));
         return [...withoutOld, entry];
@@ -795,7 +877,7 @@ export default function Revisita30DDashboard() {
 
       setSyncStatus({
         type: 'success',
-        message: `Base Julho a Dezembro atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas, incluindo Outubro).`
+        message: `Base Julho a Dezembro atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas, dados completos até 28/10).`
       });
       setShowGithubInput(false);
       setImportProgress(100);
@@ -1029,6 +1111,66 @@ export default function Revisita30DDashboard() {
     }, 400);
   };
 
+  // Synchronize REVISITA_30DXAT1_GPON_JUL_DEZ from GitHub (for GPON tab)
+  const handleGithubSyncGpon = async (customUrl?: string) => {
+    setIsImporting(true);
+    setIsGithubLoading(true);
+    setImportProgress(20);
+    setError(null);
+    setSyncStatus(null);
+
+    const targetUrl = customUrl || githubGponUrl.trim() || getGithubRevisitaGponJulDezUrl();
+    try {
+      setImportProgress(40);
+      const buffer = await fetchGithubFileArrayBuffer(targetUrl);
+      setImportProgress(75);
+      const rows = parseExcelBuffer(buffer, 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
+      if (rows.length === 0) {
+        throw new Error('Nenhum registro encontrado na planilha REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
+      }
+
+      setData(rows);
+      const sheetTag = lastParsedSheetRef.current ? ` [Aba: ${lastParsedSheetRef.current}]` : '';
+      const entry = `REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx${sheetTag} (${formatInteger(rows.length)} OS)`;
+      setLoadedFiles([entry]);
+      setSyncStatus({
+        type: 'success',
+        message: `Base GPON Julho a Dezembro atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas da aba ${lastParsedSheetRef.current || 'REVISITA_GPON'}).`
+      });
+      setShowGithubInput(false);
+      setImportProgress(100);
+      setTimeout(() => setIsImporting(false), 400);
+    } catch (err: any) {
+      console.warn('[Revisita30D GPON] Sync failed, trying local fallback...', err);
+      try {
+        const localRes = await fetch('/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
+        if (localRes.ok) {
+          const buf = await localRes.arrayBuffer();
+          const rows = parseExcelBuffer(buf, 'REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
+          if (rows.length > 0) {
+            setData(rows);
+            const sheetTag = lastParsedSheetRef.current ? ` [Aba: ${lastParsedSheetRef.current}]` : '';
+            const entry = `REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx${sheetTag} (${formatInteger(rows.length)} OS)`;
+            setLoadedFiles([entry]);
+            setSyncStatus({
+              type: 'success',
+              message: `Base GPON carregada via backup local (${formatInteger(rows.length)} OS da aba ${lastParsedSheetRef.current || 'REVISITA_GPON'}).`
+            });
+            setImportProgress(100);
+            setTimeout(() => setIsImporting(false), 400);
+            return;
+          }
+        }
+      } catch {}
+      setError(`Erro ao sincronizar REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+      setIsGithubLoading(false);
+      setImportProgress(100);
+      setTimeout(() => setIsImporting(false), 400);
+    }
+  };
+
   const handleRestoreDefault = () => {
     setData(INITIAL_MOCK_REVISITA);
     setLoadedFiles(['Base de Exemplo (7.941 OS)']);
@@ -1041,6 +1183,7 @@ export default function Revisita30DDashboard() {
       unidadeNegocio: [],
       padraoOs: [],
       codigoBaixa: [],
+      loginTecnico: [],
       startDate: '',
       endDate: ''
     });
@@ -1059,6 +1202,7 @@ export default function Revisita30DDashboard() {
       unidadeNegocio: [],
       padraoOs: [],
       codigoBaixa: [],
+      loginTecnico: [],
       startDate: '',
       endDate: ''
     });
@@ -1262,12 +1406,19 @@ export default function Revisita30DDashboard() {
       return filters.codigoBaixa.includes(rowCode);
     };
 
+    const matchesLoginFilter = (row: Revisita30DRow) => {
+      if (filters.loginTecnico.length === 0) return true;
+      const rowLogin = (row.loginTecnico || '').trim().toUpperCase();
+      return filters.loginTecnico.some(l => l.trim().toUpperCase() === rowLogin);
+    };
+
     // 0. Months available considering other active filters
     const dataForMeses = data.filter(row => {
       if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1289,6 +1440,7 @@ export default function Revisita30DDashboard() {
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1302,6 +1454,7 @@ export default function Revisita30DDashboard() {
       if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1315,6 +1468,7 @@ export default function Revisita30DDashboard() {
       if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1328,6 +1482,7 @@ export default function Revisita30DDashboard() {
       if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1342,6 +1497,7 @@ export default function Revisita30DDashboard() {
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
       return true;
@@ -1364,9 +1520,36 @@ export default function Revisita30DDashboard() {
       return a.localeCompare(b, 'pt-BR');
     });
 
+    // 6. Logins de Técnicos (WO_LOGIN_TEC) available considering other active filters
+    const dataForLogins = data.filter(row => {
+      if (filters.mes.length > 0 && !filters.mes.includes(row.mes)) return false;
+      if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
+      if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
+      if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
+      if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
+      if (!matchesBaixaFilter(row)) return false;
+      if (!matchesDateRange(row.dataBaixa)) return false;
+      return true;
+    });
+
+    const loginCounts: Record<string, number> = {};
+    dataForLogins.forEach(row => {
+      const tec = (row.loginTecnico || '').trim().toUpperCase();
+      if (tec && tec !== 'TEC_SEM_LOGIN' && tec !== 'TEC_NÃO_IDENTIFICADO') {
+        loginCounts[tec] = (loginCounts[tec] || 0) + 1;
+      }
+    });
+
+    const logins = Object.keys(loginCounts).sort((a, b) => {
+      const diff = (loginCounts[b] || 0) - (loginCounts[a] || 0);
+      if (diff !== 0) return diff;
+      return a.localeCompare(b, 'pt-BR');
+    });
+
     const padroes = ['0', '1'];
 
-    return { meses, municipios, tiposOs, empresas, unidades, padroes, codigosBaixa, baixaCounts };
+    return { meses, municipios, tiposOs, empresas, unidades, padroes, codigosBaixa, baixaCounts, logins, loginCounts };
   }, [data, filters]);
 
   // Toggle or select month filter from chart clicks
@@ -1394,6 +1577,21 @@ export default function Revisita30DDashboard() {
     });
   };
 
+  // Toggle or select login tecnico filter from chart or table clicks
+  const handleLoginClick = (login: string) => {
+    const cleaned = login.trim().toUpperCase();
+    if (!cleaned || cleaned === 'TEC_SEM_LOGIN' || cleaned === 'TEC_NÃO_IDENTIFICADO') return;
+    setFilters(prev => {
+      const exists = prev.loginTecnico.some(l => l.trim().toUpperCase() === cleaned);
+      return {
+        ...prev,
+        loginTecnico: exists 
+          ? prev.loginTecnico.filter(l => l.trim().toUpperCase() !== cleaned) 
+          : [...prev.loginTecnico, cleaned]
+      };
+    });
+  };
+
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(row => {
@@ -1402,6 +1600,7 @@ export default function Revisita30DDashboard() {
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (filters.loginTecnico.length > 0 && !filters.loginTecnico.some(l => l.trim().toUpperCase() === (row.loginTecnico || '').trim().toUpperCase())) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (filters.codigoBaixa.length > 0) {
         const rowCode = cleanBaixaCode(row.antCodigoBaixa || row.codigoBaixa);
@@ -1872,6 +2071,7 @@ export default function Revisita30DDashboard() {
     if (filters.tipoOs.length > 0) count++;
     if (filters.empresa.length > 0) count++;
     if (filters.unidadeNegocio.length > 0) count++;
+    if (filters.loginTecnico.length > 0) count++;
     if (filters.padraoOs.length > 0) count++;
     if (filters.codigoBaixa.length > 0) count++;
     if (filters.startDate || filters.endDate) count++;
@@ -1926,16 +2126,20 @@ export default function Revisita30DDashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-widest bg-red-50 text-[#EE1D23] px-2 py-0.5 rounded-md">
-                  MÓDULO QUALIDADE
+                  {isGpon ? 'GPON • MÓDULO QUALIDADE' : 'MÓDULO QUALIDADE'}
                 </span>
                 <span className="text-slate-400 text-xs font-bold">•</span>
-                <span className="text-slate-500 text-xs font-bold">REINCIDÊNCIA TÉCNICA</span>
+                <span className="text-slate-500 text-xs font-bold">
+                  {isGpon ? 'REINCIDÊNCIA GPON' : 'REINCIDÊNCIA TÉCNICA'}
+                </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase italic mt-0.5">
-                REVISITA 30D
+                {isGpon ? 'REVISITA 30D GPON' : 'REVISITA 30D'}
               </h1>
               <p className="text-xs font-medium text-slate-500 mt-1">
-                Controle, Análise e Acompanhamento de Ordens de Serviço Revisitadas (Janela de 30 Dias)
+                {isGpon
+                  ? 'Controle, Análise e Acompanhamento de Ordens de Serviço Revisitadas na Rede GPON (Janela de 30 Dias)'
+                  : 'Controle, Análise e Acompanhamento de Ordens de Serviço Revisitadas (Janela de 30 Dias)'}
               </p>
             </div>
           </div>
@@ -1951,38 +2155,53 @@ export default function Revisita30DDashboard() {
               className="hidden" 
             />
 
-            {/* Sincronizar Jul a Dez (Outubro incluso) */}
-            <button
-              onClick={() => handleGithubSyncJulDez()}
-              disabled={isGithubLoading}
-              className="flex items-center gap-1.5 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-3.5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
-              title="Sincronizar apenas o 2º Semestre (Julho a Dezembro, com dados até Outubro)"
-            >
-              {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-              <span>Sincronizar Jul-Dez (Outubro)</span>
-            </button>
+            {isGpon ? (
+              /* Botão Sincronizar GPON */
+              <button
+                onClick={() => handleGithubSyncGpon()}
+                disabled={isGithubLoading}
+                className="flex items-center gap-1.5 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-3.5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+                title="Sincronizar base GPON do GitHub (REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx)"
+              >
+                {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                <span>Sincronizar GPON (Jul-Dez)</span>
+              </button>
+            ) : (
+              <>
+                {/* Sincronizar Jul a Dez (até 28/10) */}
+                <button
+                  onClick={() => handleGithubSyncJulDez()}
+                  disabled={isGithubLoading}
+                  className="flex items-center gap-1.5 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-3.5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+                  title="Sincronizar 2º Semestre (Julho a Dezembro, atualizado até 28/10)"
+                >
+                  {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                  <span>Sincronizar Jul-Dez (até 28/10)</span>
+                </button>
 
-            {/* Sincronizar Jan a Jun */}
-            <button
-              onClick={() => handleGithubSyncJanJun()}
-              disabled={isGithubLoading}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-sm active:scale-95 uppercase italic text-xs cursor-pointer"
-              title="Sincronizar apenas o 1º Semestre (Janeiro a Junho)"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-300" />
-              <span>Jan-Jun</span>
-            </button>
+                {/* Sincronizar Jan a Jun */}
+                <button
+                  onClick={() => handleGithubSyncJanJun()}
+                  disabled={isGithubLoading}
+                  className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-sm active:scale-95 uppercase italic text-xs cursor-pointer"
+                  title="Sincronizar apenas o 1º Semestre (Janeiro a Junho)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-slate-300" />
+                  <span>Jan-Jun</span>
+                </button>
 
-            {/* Sincronizar GitHub (Ambos os arquivos) */}
-            <button
-              onClick={() => handleGithubSyncBoth()}
-              disabled={isGithubLoading}
-              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
-              title="Sincronizar ambos os arquivos: REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Ano Todo</span>
-            </button>
+                {/* Sincronizar GitHub (Ambos os arquivos) */}
+                <button
+                  onClick={() => handleGithubSyncBoth()}
+                  disabled={isGithubLoading}
+                  className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
+                  title="Sincronizar ambos os arquivos: REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Ano Todo</span>
+                </button>
+              </>
+            )}
 
             {/* Central GitHub & Upload */}
             <button
@@ -2004,14 +2223,14 @@ export default function Revisita30DDashboard() {
               <span className="hidden sm:inline">Link GitHub</span>
             </button>
 
-            {/* Importar Excel (Permite selecionar 2 arquivos) */}
+            {/* Importar Excel */}
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-black py-2.5 px-4 rounded-xl border border-slate-200 transition-all shadow-2xs active:scale-95 uppercase italic text-xs cursor-pointer"
-              title="Importar 1 ou 2 arquivos Excel do computador"
+              title={isGpon ? "Importar arquivo Excel REVISITA GPON do computador" : "Importar 1 ou 2 arquivos Excel do computador"}
             >
               <Upload className="w-3.5 h-3.5 text-[#EE1D23]" />
-              <span>Importar Excel (1 ou 2)</span>
+              <span>{isGpon ? "Importar Excel GPON" : "Importar Excel (1 ou 2)"}</span>
             </button>
 
             {/* Exportar */}
@@ -2101,53 +2320,94 @@ export default function Revisita30DDashboard() {
               className="mt-6 pt-6 border-t border-slate-100 overflow-hidden"
             >
               <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                      Sincronização dos 2 Arquivos GitHub
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      URLs diretas das bases semestrais REVISITA_30D_Jan_Jun.xlsx e REVISITA_30D_Jul_Dez.xlsx
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleGithubSyncBoth(githubJanJunUrl, githubJulDezUrl)}
-                    disabled={isGithubLoading}
-                    className="bg-[#EE1D23] hover:bg-red-600 disabled:opacity-50 text-white font-black py-2 px-4 rounded-xl text-xs uppercase italic flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
-                  >
-                    {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Sincronizar Ambos os Arquivos
-                  </button>
-                </div>
+                {isGpon ? (
+                  /* GitHub Drawer GPON */
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                          Sincronização GitHub REVISITA GPON
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          URL direta da base REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx no GitHub
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleGithubSyncGpon(githubGponUrl)}
+                        disabled={isGithubLoading}
+                        className="bg-[#EE1D23] hover:bg-red-600 disabled:opacity-50 text-white font-black py-2 px-4 rounded-xl text-xs uppercase italic flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+                      >
+                        {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Sincronizar Arquivo GPON
+                      </button>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                      <FileSpreadsheet className="w-3 h-3 text-[#EE1D23]" />
-                      Arquivo Jan a Jun (REVISITA_30D_Jan_Jun.xlsx)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={getGithubRevisitaJanJunUrl()}
-                      value={githubJanJunUrl}
-                      onChange={(e) => setGithubJanJunUrl(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#EE1D23] transition-all"
-                    />
+                    <div className="space-y-1 pt-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                        <FileSpreadsheet className="w-3 h-3 text-[#EE1D23]" />
+                        Arquivo REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={getGithubRevisitaGponJulDezUrl()}
+                        value={githubGponUrl}
+                        onChange={(e) => setGithubGponUrl(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#EE1D23] transition-all"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                      <FileSpreadsheet className="w-3 h-3 text-[#EE1D23]" />
-                      Arquivo Jul a Dez (REVISITA_30D_Jul_Dez.xlsx)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={getGithubRevisitaJulDezUrl()}
-                      value={githubJulDezUrl}
-                      onChange={(e) => setGithubJulDezUrl(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#EE1D23] transition-all"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  /* GitHub Drawer Normal (Jan_Jun e Jul_Dez) */
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                          Sincronização dos 2 Arquivos GitHub
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          URLs diretas das bases semestrais REVISITA_30D_Jan_Jun.xlsx e REVISITA_30D_Jul_Dez.xlsx
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleGithubSyncBoth(githubJanJunUrl, githubJulDezUrl)}
+                        disabled={isGithubLoading}
+                        className="bg-[#EE1D23] hover:bg-red-600 disabled:opacity-50 text-white font-black py-2 px-4 rounded-xl text-xs uppercase italic flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+                      >
+                        {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Sincronizar Ambos os Arquivos
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                          <FileSpreadsheet className="w-3 h-3 text-[#EE1D23]" />
+                          Arquivo Jan a Jun (REVISITA_30D_Jan_Jun.xlsx)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={getGithubRevisitaJanJunUrl()}
+                          value={githubJanJunUrl}
+                          onChange={(e) => setGithubJanJunUrl(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#EE1D23] transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                          <FileSpreadsheet className="w-3 h-3 text-[#EE1D23]" />
+                          Arquivo Jul a Dez (REVISITA_30D_Jul_Dez.xlsx)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={getGithubRevisitaJulDezUrl()}
+                          value={githubJulDezUrl}
+                          onChange={(e) => setGithubJulDezUrl(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#EE1D23] transition-all"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
@@ -2176,36 +2436,51 @@ export default function Revisita30DDashboard() {
             <FileSpreadsheet className="w-7 h-7 text-[#EE1D23]" />
           </div>
           <h3 className="text-xl font-black text-slate-800 uppercase italic tracking-tight mb-2">
-            Nenhum Dado de Revisita 30D Carregado
+            {isGpon ? 'Nenhum Dado de Revisita 30D GPON Carregado' : 'Nenhum Dado de Revisita 30D Carregado'}
           </h3>
           <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed font-bold uppercase tracking-wider">
-            Sincronize os arquivos REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez com o GitHub ou importe os arquivos Excel para visualizar os indicadores de repetição e retrabalho.
+            {isGpon
+              ? 'Sincronize o arquivo REVISITA_30DXAT1_GPON_JUL_DEZ com o GitHub ou importe a planilha Excel para visualizar os indicadores GPON.'
+              : 'Sincronize os arquivos REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez com o GitHub ou importe os arquivos Excel para visualizar os indicadores de repetição e retrabalho.'}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2.5">
-            <button
-              onClick={() => handleGithubSyncJulDez()}
-              disabled={isGithubLoading}
-              className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
-            >
-              {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-              <span>Sincronizar Jul-Dez (Outubro)</span>
-            </button>
-            <button
-              onClick={() => handleGithubSyncJanJun()}
-              disabled={isGithubLoading}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm active:scale-95 uppercase italic text-xs cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-300" />
-              <span>Sincronizar Jan-Jun</span>
-            </button>
-            <button
-              onClick={() => handleGithubSyncBoth()}
-              disabled={isGithubLoading}
-              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-800 font-bold py-2.5 px-4 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Sincronizar Ambos (Jan-Dez)</span>
-            </button>
+            {isGpon ? (
+              <button
+                onClick={() => handleGithubSyncGpon()}
+                disabled={isGithubLoading}
+                className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+              >
+                {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                <span>Sincronizar GPON (REVISITA_30DXAT1_GPON_JUL_DEZ)</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleGithubSyncJulDez()}
+                  disabled={isGithubLoading}
+                  className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
+                >
+                  {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                  <span>Sincronizar Jul-Dez (até 28/10)</span>
+                </button>
+                <button
+                  onClick={() => handleGithubSyncJanJun()}
+                  disabled={isGithubLoading}
+                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm active:scale-95 uppercase italic text-xs cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-slate-300" />
+                  <span>Sincronizar Jan-Jun</span>
+                </button>
+                <button
+                  onClick={() => handleGithubSyncBoth()}
+                  disabled={isGithubLoading}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-800 font-bold py-2.5 px-4 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Sincronizar Ambos (Jan-Dez)</span>
+                </button>
+              </>
+            )}
             <button
               onClick={() => setIsGithubModalOpen(true)}
               className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md active:scale-95 uppercase italic text-xs cursor-pointer"
@@ -2252,6 +2527,7 @@ export default function Revisita30DDashboard() {
                 unidadeNegocio: [],
                 padraoOs: [],
                 codigoBaixa: [],
+                loginTecnico: [],
                 startDate: '',
                 endDate: ''
               })}
@@ -2433,8 +2709,8 @@ export default function Revisita30DDashboard() {
           </div>
         </div>
 
-        {/* 7 Filtros em Dropdown (MultiFilterSelect) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 items-end">
+        {/* 8 Filtros em Dropdown (MultiFilterSelect) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 items-end">
           {/* MÊS */}
           <MultiFilterSelect
             label="MÊS"
@@ -2483,6 +2759,17 @@ export default function Revisita30DDashboard() {
             options={filterOptions.unidades}
             onChange={(val) => setFilters(prev => ({ ...prev, unidadeNegocio: val }))}
             placeholder="Todas as UNs"
+          />
+
+          {/* LOGIN (WO_LOGIN_TEC) */}
+          <MultiFilterSelect
+            label="LOGIN"
+            icon={<UserCheck className="w-3.5 h-3.5" />}
+            value={filters.loginTecnico}
+            options={filterOptions.logins}
+            optionCounts={filterOptions.loginCounts}
+            onChange={(val) => setFilters(prev => ({ ...prev, loginTecnico: val }))}
+            placeholder="Todos os Logins"
           />
 
           {/* PADRÃO OS */}
@@ -2550,6 +2837,15 @@ export default function Revisita30DDashboard() {
               <span key={`un-${u}`} className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors">
                 UN: {u}
                 <button type="button" onClick={() => setFilters(prev => ({ ...prev, unidadeNegocio: prev.unidadeNegocio.filter(x => x !== u) }))} className="hover:text-red-600 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            {filters.loginTecnico.map(l => (
+              <span key={`login-${l}`} className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors font-mono">
+                <UserCheck className="w-3 h-3 text-[#EE1D23]" />
+                Login: {l}
+                <button type="button" onClick={() => setFilters(prev => ({ ...prev, loginTecnico: prev.loginTecnico.filter(x => x !== l) }))} className="hover:text-red-600 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -3810,6 +4106,18 @@ export default function Revisita30DDashboard() {
                 <option value={15}>Top 15</option>
                 <option value={25}>Top 25</option>
               </select>
+
+              {filters.loginTecnico.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilters(prev => ({ ...prev, loginTecnico: [] }))}
+                  className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-xl text-[11px] font-black flex items-center gap-1 transition-all cursor-pointer"
+                  title="Limpar filtro de login técnico aplicado"
+                >
+                  <X className="w-3 h-3" />
+                  Filtrando {filters.loginTecnico.length} login{filters.loginTecnico.length > 1 ? 's' : ''} (Limpar)
+                </button>
+              )}
             </div>
           </div>
 
@@ -3855,6 +4163,7 @@ export default function Revisita30DDashboard() {
                               <span className="font-bold text-slate-200">{formatInteger(d.volume)} OS</span>
                             </p>
                           </div>
+                          <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">Clique para filtrar por este técnico</p>
                         </div>
                       );
                     }
@@ -3869,12 +4178,19 @@ export default function Revisita30DDashboard() {
                       formatter={(val: number) => `${val.toFixed(1)}%`} 
                       style={{ fill: '#1E293B', fontSize: 10, fontWeight: 800 }} 
                     />
-                    {chartTecnicoData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-tec-${index}`} 
-                        fill={entry.nota <= 10 ? '#10B981' : entry.nota <= 15 ? '#F59E0B' : '#EE1D23'} 
-                      />
-                    ))}
+                    {chartTecnicoData.map((entry, index) => {
+                      const isSelected = filters.loginTecnico.some(l => l.trim().toUpperCase() === entry.tecnico.trim().toUpperCase());
+                      return (
+                        <Cell 
+                          key={`cell-tec-${index}`} 
+                          fill={entry.nota <= 10 ? '#10B981' : entry.nota <= 15 ? '#F59E0B' : '#EE1D23'} 
+                          cursor="pointer"
+                          onClick={() => handleLoginClick(entry.tecnico)}
+                          stroke={isSelected ? '#1E293B' : 'none'}
+                          strokeWidth={isSelected ? 2 : 0}
+                        />
+                      );
+                    })}
                   </Bar>
                 ) : (
                   <Bar dataKey="semPadrao" fill="#EE1D23" radius={[0, 6, 6, 0]}>
@@ -3884,6 +4200,19 @@ export default function Revisita30DDashboard() {
                       formatter={(val: number) => `${val}`} 
                       style={{ fill: '#EE1D23', fontSize: 10, fontWeight: 800 }} 
                     />
+                    {chartTecnicoData.map((entry, index) => {
+                      const isSelected = filters.loginTecnico.some(l => l.trim().toUpperCase() === entry.tecnico.trim().toUpperCase());
+                      return (
+                        <Cell 
+                          key={`cell-tec-sem-${index}`} 
+                          fill="#EE1D23" 
+                          cursor="pointer"
+                          onClick={() => handleLoginClick(entry.tecnico)}
+                          stroke={isSelected ? '#1E293B' : 'none'}
+                          strokeWidth={isSelected ? 2 : 0}
+                        />
+                      );
+                    })}
                   </Bar>
                 )}
               </BarChart>

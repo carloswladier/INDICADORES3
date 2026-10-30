@@ -44,7 +44,9 @@ import {
   RefreshCw,
   HardDrive,
   Box,
-  Tag
+  Tag,
+  User,
+  UserCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -1114,7 +1116,7 @@ export default function App() {
   const [importProgress, setImportProgress] = useState(0);
   const cancelImportRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'outage' | 'qoe-gpon' | 'at5' | 'churn' | 'log' | 'revisita30d' | 'logbook'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'outage' | 'qoe-gpon' | 'at5' | 'churn' | 'log' | 'revisita30d' | 'revisita30d-gpon' | 'logbook'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('CLARO_SIDEBAR_COLLAPSED') === 'true';
@@ -1192,6 +1194,7 @@ export default function App() {
     modelo: ['Todos'] as string[],
     terminal: ['Todos'] as string[],
     periodoAgenda: ['Todos'] as string[],
+    login: ['Todos'] as string[],
     startDate: '',
     endDate: ''
   });
@@ -1240,11 +1243,13 @@ export default function App() {
         const matchTerminal = key === 'terminal' || (currentFilters.terminal ? (currentFilters.terminal.includes('Todos') || currentFilters.terminal.includes(itemTerminal)) : true);
         const itemPeriodo = item.periodoAgenda || 'NÃO INFORMADO';
         const matchPeriodo = key === 'periodoAgenda' || (currentFilters.periodoAgenda ? (currentFilters.periodoAgenda.includes('Todos') || currentFilters.periodoAgenda.includes(itemPeriodo)) : true);
+        const itemLogin = item.loginTecnico || item.login || 'NÃO INFORMADO';
+        const matchLogin = key === 'loginTecnico' || key === 'login' || (currentFilters.login ? (currentFilters.login.includes('Todos') || currentFilters.login.includes(itemLogin)) : true);
 
-        return matchMes && matchCidade && matchArea && matchExpurgo && matchTec && matchGrupo && matchTipoOs && matchTipoEquip && matchModelo && matchTerminal && matchPeriodo;
+        return matchMes && matchCidade && matchArea && matchExpurgo && matchTec && matchGrupo && matchTipoOs && matchTipoEquip && matchModelo && matchTerminal && matchPeriodo && matchLogin;
       });
       
-      const unique = [...new Set(otherFiltersApplied.map(d => String(d[key] || ((key === 'tipoOs' || key === 'tipoEquipamento' || key === 'modelo' || key === 'periodoAgenda') ? 'NÃO INFORMADO' : ''))).filter(Boolean))];
+      const unique = [...new Set(otherFiltersApplied.map(d => String(d[key] || ((key === 'tipoOs' || key === 'tipoEquipamento' || key === 'modelo' || key === 'periodoAgenda' || key === 'loginTecnico' || key === 'login') ? 'NÃO INFORMADO' : ''))).filter(Boolean))];
       return ['Todos', ...(unique as string[]).sort((a, b) => a.localeCompare(b, 'pt-BR'))];
     };
 
@@ -1261,7 +1266,8 @@ export default function App() {
       tipoEquipamentos: getOptions('tipoEquipamento', filters),
       modelos: getOptions('modelo', filters),
       periodosAgenda: getOptions('periodoAgenda', filters),
-      terminais: getOptions('terminal', filters)
+      terminais: getOptions('terminal', filters),
+      logins: getOptions('loginTecnico', filters)
     };
   }, [baseData, filters]);
 
@@ -1285,6 +1291,7 @@ export default function App() {
         modelo?: boolean;
         periodoAgenda?: boolean;
         terminal?: boolean;
+        login?: boolean;
         node?: boolean;
         baixa?: boolean;
         date?: boolean;
@@ -1376,6 +1383,12 @@ export default function App() {
         if (!exclude.terminal) {
           const itemTerminal = item.terminal || 'NÃO INFORMADO';
           if (flts.terminal && !flts.terminal.includes('Todos') && !flts.terminal.includes(itemTerminal)) return false;
+        }
+
+        // Login Técnico (WO_LOGIN_TEC)
+        if (!exclude.login) {
+          const itemLogin = item.loginTecnico || item.login || 'NÃO INFORMADO';
+          if (flts.login && !flts.login.includes('Todos') && !flts.login.includes(itemLogin)) return false;
         }
 
         // Node
@@ -1541,6 +1554,15 @@ export default function App() {
     }));
   };
 
+  const handleLoginClick = (loginName: string) => {
+    setFilters(prev => ({
+      ...prev,
+      login: prev.login?.includes(loginName) && prev.login.length === 1
+        ? ['Todos']
+        : [loginName]
+    }));
+  };
+
   const handleClearAllCrossFilters = () => {
     setFilters(prev => ({
       ...prev,
@@ -1553,7 +1575,8 @@ export default function App() {
       tipoEquipamento: ['Todos'],
       modelo: ['Todos'],
       terminal: ['Todos'],
-      periodoAgenda: ['Todos']
+      periodoAgenda: ['Todos'],
+      login: ['Todos']
     }));
     setSelectedNodes([]);
     setSelectedBaixas([]);
@@ -1571,6 +1594,7 @@ export default function App() {
       (!!filters.modelo && !filters.modelo.includes('Todos') && filters.modelo.length > 0) ||
       (!!filters.periodoAgenda && !filters.periodoAgenda.includes('Todos') && filters.periodoAgenda.length > 0) ||
       (!!filters.terminal && !filters.terminal.includes('Todos') && filters.terminal.length > 0) ||
+      (!!filters.login && !filters.login.includes('Todos') && filters.login.length > 0) ||
       selectedNodes.length > 0 ||
       selectedBaixas.length > 0
     );
@@ -1663,6 +1687,17 @@ export default function App() {
         onRemove: () => setFilters(f => ({
           ...f,
           terminal: f.terminal.filter(x => x !== term).length === 0 ? ['Todos'] : f.terminal.filter(x => x !== term)
+        }))
+      }));
+    }
+
+    if (filters.login && !filters.login.includes('Todos')) {
+      filters.login.forEach(log => chips.push({
+        label: 'Login',
+        value: log,
+        onRemove: () => setFilters(f => ({
+          ...f,
+          login: f.login.filter(x => x !== log).length === 0 ? ['Todos'] : f.login.filter(x => x !== log)
         }))
       }));
     }
@@ -2728,6 +2763,12 @@ export default function App() {
               'JANELA', 'JANELA_AGENDA', 'DS_JANELA', 'PERIODO', 'ds_periodo_agenda', 'periodo_agenda'
             ]) || 'NÃO INFORMADO';
 
+            const rawLoginTec = getRowVal(row, [
+              'WO_LOGIN_TEC', 'WOLOGINTEC', 'wo_login_tec', 'LOGIN_TEC', 'LOGINTEC',
+              'CD_LOGIN_USR_BAIXA', 'LOGIN', 'login', 'LOGIN_TECNICO', 'NM_TECNICO',
+              'TECNICO', 'CD_LOGIN_USR_ABERTURA', 'MATRICULA', 'WO_TEC', 'NM_LOGIN'
+            ]) || 'NÃO INFORMADO';
+
             const cleanOs = rawOs ? String(rawOs).trim().replace(/\.0+$/, '') : '';
             const cleanCtt = rawContrato ? String(rawContrato).trim().replace(/\.0+$/, '') : '';
 
@@ -2772,7 +2813,9 @@ export default function App() {
               tipoOs: rawTipoOs && rawTipoOs !== 'N/A' && rawTipoOs !== 'UNDEFINED' ? rawTipoOs : 'REPARO',
               tipoEquipamento: rawTipoEquipamento && rawTipoEquipamento !== 'N/A' && rawTipoEquipamento !== 'UNDEFINED' ? rawTipoEquipamento : 'NÃO INFORMADO',
               modelo: rawModelo && rawModelo !== 'N/A' && rawModelo !== 'UNDEFINED' ? rawModelo : 'NÃO INFORMADO',
-              periodoAgenda: rawPeriodoAgenda && rawPeriodoAgenda !== 'N/A' && rawPeriodoAgenda !== 'UNDEFINED' ? rawPeriodoAgenda : 'NÃO INFORMADO'
+              periodoAgenda: rawPeriodoAgenda && rawPeriodoAgenda !== 'N/A' && rawPeriodoAgenda !== 'UNDEFINED' ? rawPeriodoAgenda : 'NÃO INFORMADO',
+              loginTecnico: rawLoginTec,
+              login: rawLoginTec
             });
           }
 
@@ -2810,6 +2853,7 @@ export default function App() {
                 modelo: ['Todos'],
                 terminal: ['Todos'],
                 periodoAgenda: ['Todos'],
+                login: ['Todos'],
                 startDate: '',
                 endDate: ''
               });
@@ -3116,6 +3160,22 @@ export default function App() {
                 >
                   <RotateCcw className={cn("w-4 h-4 shrink-0", activeTab === 'revisita30d' ? "text-white" : "text-[#EE1D23]")} />
                   {!isSidebarCollapsed && <span className="truncate">REVISITA 30D</span>}
+                </button>
+
+                {/* REVISITA 30D GPON */}
+                <button
+                  onClick={() => setActiveTab('revisita30d-gpon')}
+                  title="REVISITA 30D GPON"
+                  className={cn(
+                    "flex items-center gap-2.5 px-2.5 py-2 rounded-xl font-black uppercase italic text-[11px] tracking-wide transition-all active:scale-95 whitespace-nowrap w-full text-left cursor-pointer",
+                    isSidebarCollapsed ? "md:justify-center md:px-0" : "",
+                    activeTab === 'revisita30d-gpon'
+                      ? "bg-[#EE1D23] text-white shadow-md shadow-red-500/25"
+                      : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+                  )}
+                >
+                  <RotateCcw className={cn("w-4 h-4 shrink-0", activeTab === 'revisita30d-gpon' ? "text-white" : "text-[#EE1D23]")} />
+                  {!isSidebarCollapsed && <span className="truncate">REVISITA 30D GPON</span>}
                 </button>
 
                 {/* DIÁRIO DE BORDO */}
@@ -3439,6 +3499,7 @@ export default function App() {
               (filters.tipoEquipamento && !filters.tipoEquipamento.includes('Todos')) ||
               (filters.modelo && !filters.modelo.includes('Todos')) ||
               (filters.periodoAgenda && !filters.periodoAgenda.includes('Todos')) ||
+              (filters.login && !filters.login.includes('Todos')) ||
               Boolean(filters.startDate) ||
               Boolean(filters.endDate)) && (
               <button
@@ -3455,6 +3516,7 @@ export default function App() {
                   modelo: ['Todos'],
                   terminal: ['Todos'],
                   periodoAgenda: ['Todos'],
+                  login: ['Todos'],
                   startDate: '',
                   endDate: ''
                 })}
@@ -3550,6 +3612,13 @@ export default function App() {
               value={filters.periodoAgenda}
               options={filterOptions.periodosAgenda}
               onChange={(v) => setFilters(f => ({ ...f, periodoAgenda: v }))}
+            />
+            <MultiFilterSelect 
+              label="Login (WO_LOGIN_TEC)" 
+              icon={<User className="w-3.5 h-3.5" />}
+              value={filters.login}
+              options={filterOptions.logins}
+              onChange={(v) => setFilters(f => ({ ...f, login: v }))}
             />
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Início</label>
@@ -5483,6 +5552,10 @@ export default function App() {
 
           <div className={activeTab === 'revisita30d' ? 'block' : 'hidden'}>
             <Revisita30DDashboard />
+          </div>
+
+          <div className={activeTab === 'revisita30d-gpon' ? 'block' : 'hidden'}>
+            <Revisita30DDashboard isGpon={true} />
           </div>
 
           <div className={activeTab === 'logbook' ? 'block' : 'hidden'}>

@@ -25,7 +25,8 @@ import {
   X,
   Radio,
   Clock,
-  Sparkles
+  Sparkles,
+  User
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { VisitData } from '../data';
@@ -36,7 +37,7 @@ interface At1AnaliticoTableProps {
   totalDataCount: number;
 }
 
-type SortField = 'fullDate' | 'contrato' | 'cidade' | 'area' | 'tecnologia' | 'tipoOs' | 'status' | 'expurgo' | 'notaAT1' | 'node' | 'tipoEquipamento' | 'cdBaixa';
+type SortField = 'fullDate' | 'contrato' | 'cidade' | 'area' | 'tecnologia' | 'tipoOs' | 'loginTecnico' | 'status' | 'expurgo' | 'notaAT1' | 'node' | 'tipoEquipamento' | 'cdBaixa';
 type SortOrder = 'asc' | 'desc';
 type DensityMode = 'compact' | 'normal' | 'spacious';
 
@@ -46,6 +47,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
   const [expurgoFilter, setExpurgoFilter] = useState<'Todos' | 'Sem Expurgo' | 'Com Expurgo'>('Todos');
   const [techFilter, setTechFilter] = useState<'Todos' | 'GPON' | 'HFC' | 'HÍBRIDO' | 'OUTROS'>('Todos');
   const [tipoOsFilter, setTipoOsFilter] = useState<string>('Todos');
+  const [loginFilter, setLoginFilter] = useState<string>('Todos');
   
   const [sortField, setSortField] = useState<SortField>('fullDate');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -64,6 +66,18 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
       if (item.tipoOs) set.add(item.tipoOs);
     });
     return Array.from(set).sort();
+  }, [data]);
+
+  // Available unique Login Técnico list (WO_LOGIN_TEC)
+  const availableLogins = useMemo(() => {
+    const set = new Set<string>();
+    data.forEach(item => {
+      const loginVal = item.loginTecnico || item.login;
+      if (loginVal && loginVal !== 'NÃO INFORMADO' && loginVal !== 'N/A') {
+        set.add(loginVal);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [data]);
 
   // Toggle sort direction or change column
@@ -93,6 +107,10 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
       // Tipo OS filter
       if (tipoOsFilter !== 'Todos' && item.tipoOs !== tipoOsFilter) return false;
 
+      // Login Técnico filter (WO_LOGIN_TEC)
+      const currentLogin = item.loginTecnico || item.login || 'NÃO INFORMADO';
+      if (loginFilter !== 'Todos' && currentLogin !== loginFilter) return false;
+
       // Text search across all relevant fields
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
@@ -101,6 +119,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
         const areaStr = (item.area || '').toLowerCase();
         const techStr = (item.tecnologia || '').toLowerCase();
         const tipoOsStr = (item.tipoOs || '').toLowerCase();
+        const loginStr = (item.loginTecnico || item.login || '').toLowerCase();
         const nodeStr = (item.node || '').toLowerCase();
         const terminalStr = (item.terminal || '').toLowerCase();
         const cdBaixaStr = (item.cdBaixa || '').toLowerCase();
@@ -116,6 +135,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
           areaStr.includes(q) ||
           techStr.includes(q) ||
           tipoOsStr.includes(q) ||
+          loginStr.includes(q) ||
           nodeStr.includes(q) ||
           terminalStr.includes(q) ||
           cdBaixaStr.includes(q) ||
@@ -130,7 +150,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
 
       return true;
     });
-  }, [data, statusFilter, expurgoFilter, techFilter, tipoOsFilter, searchTerm]);
+  }, [data, statusFilter, expurgoFilter, techFilter, tipoOsFilter, loginFilter, searchTerm]);
 
   // Sorted list
   const sortedData = useMemo(() => {
@@ -141,6 +161,9 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
       if (sortField === 'contrato') {
         valA = a.contrato || a.id || '';
         valB = b.contrato || b.id || '';
+      } else if (sortField === 'loginTecnico') {
+        valA = a.loginTecnico || a.login || '';
+        valB = b.loginTecnico || b.login || '';
       } else if (sortField === 'fullDate') {
         valA = a.fullDate ? new Date(a.fullDate).getTime() : 0;
         valB = b.fullDate ? new Date(b.fullDate).getTime() : 0;
@@ -225,6 +248,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
       'Área': row.area || '',
       'Tecnologia': row.tecnologia || '',
       'Tipo de OS': row.tipoOs || 'REPARO',
+      'Login (WO_LOGIN_TEC)': row.loginTecnico || row.login || 'NÃO INFORMADO',
       'Tipo de Equipamento': row.tipoEquipamento || '',
       'Modelo': row.modelo || '',
       'Janela de Agenda': row.periodoAgenda || '',
@@ -487,9 +511,9 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
           </div>
 
           {/* Quick Filters and Search Toolbar: Full space row */}
-          <div className="mt-4 pt-3 border-t border-slate-200/70 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2.5">
+          <div className="mt-4 pt-3 border-t border-slate-200/70 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {/* Search Input */}
-            <div className="md:col-span-4 relative">
+            <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 id="input-search-at1-analitico"
@@ -499,7 +523,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Buscar contrato, cidade, área, tipo OS, equipamento, node..."
+                placeholder="Buscar contrato, login, cidade, área, node..."
                 className="w-full pl-10 pr-7 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#EE1D23] transition-all shadow-2xs"
               />
               {searchTerm && (
@@ -514,7 +538,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
             </div>
 
             {/* Status Filter */}
-            <div className="md:col-span-2">
+            <div>
               <select
                 id="select-status-at1-analitico"
                 value={statusFilter}
@@ -531,7 +555,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
             </div>
 
             {/* Expurgo Filter */}
-            <div className="md:col-span-2">
+            <div>
               <select
                 id="select-expurgo-at1-analitico"
                 value={expurgoFilter}
@@ -548,7 +572,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
             </div>
 
             {/* Tecnologia Filter */}
-            <div className="md:col-span-2">
+            <div>
               <select
                 id="select-tech-at1-analitico"
                 value={techFilter}
@@ -567,7 +591,7 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
             </div>
 
             {/* Tipo OS Filter */}
-            <div className="md:col-span-2">
+            <div>
               <select
                 id="select-tipo-os-at1-analitico"
                 value={tipoOsFilter}
@@ -580,6 +604,24 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
                 <option value="Todos">Tipo OS: Todos</option>
                 {availableTiposOs.map(tipo => (
                   <option key={tipo} value={tipo}>{tipo}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Login Filter (WO_LOGIN_TEC) */}
+            <div>
+              <select
+                id="select-login-at1-analitico"
+                value={loginFilter}
+                onChange={(e) => {
+                  setLoginFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full py-2 px-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-[#EE1D23] transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="Todos">Login (WO_LOGIN_TEC): Todos</option>
+                {availableLogins.map(log => (
+                  <option key={log} value={log}>{log}</option>
                 ))}
               </select>
             </div>
@@ -737,6 +779,22 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
                   <div className="flex items-center gap-1">
                     <span>Tipo de OS</span>
                     {renderSortIcon('tipoOs')}
+                  </div>
+                </th>
+
+                {/* 7. Login Técnico (WO_LOGIN_TEC) */}
+                <th 
+                  onClick={() => handleSort('loginTecnico')}
+                  className={cn(
+                    "cursor-pointer hover:bg-slate-200/70 transition-colors group min-w-[130px]",
+                    densityStyles.th,
+                    sortField === 'loginTecnico' && "text-[#EE1D23] bg-red-50/50"
+                  )}
+                  title="Ordenar por Login Técnico (WO_LOGIN_TEC)"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Login (WO_LOGIN_TEC)</span>
+                    {renderSortIcon('loginTecnico')}
                   </div>
                 </th>
 
@@ -961,6 +1019,18 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
                         tipoOsColor
                       )}>
                         {tipoOs}
+                      </span>
+                    </td>
+
+                    {/* 7. Login Técnico (WO_LOGIN_TEC) */}
+                    <td className={cn("whitespace-nowrap", densityStyles.td)}>
+                      <span className={cn(
+                        "font-mono font-bold px-2 py-0.5 rounded-md border text-[11px] transition-colors tabular-nums inline-block",
+                        row.loginTecnico || row.login
+                          ? "bg-slate-100 text-slate-800 border-slate-200 group-hover:bg-white group-hover:border-slate-300"
+                          : "bg-slate-50 text-slate-400 border-slate-200 italic font-sans text-[10px]"
+                      )}>
+                        {row.loginTecnico || row.login || 'NÃO INFORMADO'}
                       </span>
                     </td>
 
@@ -1279,6 +1349,12 @@ export const At1AnaliticoTable: React.FC<At1AnaliticoTableProps> = ({ data, tota
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">Tipo de OS</span>
                     <span className="font-bold text-slate-900">{selectedRow.tipoOs || 'REPARO'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block">Login Técnico (WO_LOGIN_TEC)</span>
+                    <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 inline-block text-[11px]">
+                      {selectedRow.loginTecnico || selectedRow.login || 'NÃO INFORMADO'}
+                    </span>
                   </div>
                 </div>
               </div>
