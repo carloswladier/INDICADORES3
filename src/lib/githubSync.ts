@@ -124,9 +124,39 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
   // Remote URL candidates to attempt
   const remoteCandidates: string[] = [];
 
-  // Query latest commit SHA on GitHub to bypass CDN caching with 100% freshness guarantee
+  // Pinned commit f89188ac8dde26d8884bb4a6fd4460a2e775ed14 ("REVISITA 2810") which contains the full 28/10 datasets
+  const COMMIT_2810 = 'f89188ac8dde26d8884bb4a6fd4460a2e775ed14';
+  if (fileName) {
+    if (fileName.includes('REVISITA_30D_Jul_Dez')) {
+      remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jul_Dez.xlsx`);
+    } else if (fileName.includes('REVISITA_30D_Jan_Jun')) {
+      remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jan_Jun.xlsx`);
+    } else if (fileName.includes('REVISITA_30DXAT1_GPON')) {
+      remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx`);
+    }
+  }
+
+  // Query latest commit SHA for specific file and for main branch on GitHub to bypass CDN caching
   let latestCommitSha: string | null = null;
   try {
+    // 1. Try file-specific commits to get the exact commit that contains/modified this file
+    if (fileName) {
+      const fileCommitsRes = await fetch(`https://api.github.com/repos/carloswladier/INDICADORES3/commits?path=${encodeURIComponent(fileName)}&per_page=5`, {
+        headers: { 'Accept': 'application/vnd.github.v3+json' },
+        cache: 'no-cache'
+      });
+      if (fileCommitsRes.ok) {
+        const fileCommits = await fileCommitsRes.json();
+        if (Array.isArray(fileCommits)) {
+          for (const fc of fileCommits) {
+            if (fc && fc.sha) {
+              remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${fc.sha}/${fileName}`);
+            }
+          }
+        }
+      }
+    }
+
     const commitRes = await fetch('https://api.github.com/repos/carloswladier/INDICADORES3/commits/main', {
       headers: { 'Accept': 'application/vnd.github.v3+json' },
       cache: 'no-cache'
@@ -168,9 +198,15 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
   }
   if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
+    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jul_Dez.xlsx`);
   }
   if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx');
+    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jan_Jun.xlsx`);
+  }
+  if (primaryUrl.includes('REVISITA_30DXAT1_GPON')) {
+    remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
+    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx`);
   }
   if (primaryUrl.includes('QOE_GPON') || primaryUrl.includes('QOE')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx');

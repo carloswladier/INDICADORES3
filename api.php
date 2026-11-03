@@ -184,6 +184,11 @@ if ($endpoint === 'proxy-github' || $action === 'proxy-github') {
     // Resolve commit SHA no GitHub para contornar qualquer cache estático ou CDN Fastly
     $commitSha = getLatestGithubCommitSha("carloswladier/INDICADORES3", "main");
     $urlsToTry = [];
+    $COMMIT_2810 = 'f89188ac8dde26d8884bb4a6fd4460a2e775ed14';
+
+    if (strpos($target, 'REVISITA_30D_Jul_Dez') !== false || strpos($target, 'REVISITA_30D_Jan_Jun') !== false || strpos($target, 'REVISITA_30DXAT1_GPON') !== false) {
+        $urlsToTry[] = "https://raw.githubusercontent.com/carloswladier/INDICADORES3/{$COMMIT_2810}/{$localName}";
+    }
 
     if (!empty($commitSha) && strpos($target, '/INDICADORES3/main/') !== false) {
         $urlsToTry[] = str_replace('/INDICADORES3/main/', "/INDICADORES3/{$commitSha}/", $target);
@@ -191,6 +196,9 @@ if ($endpoint === 'proxy-github' || $action === 'proxy-github') {
     $cacheBusterUrl = (strpos($target, '?') !== false) ? "{$target}&_t=" . time() : "{$target}?_t=" . time();
     $urlsToTry[] = $cacheBusterUrl;
     $urlsToTry[] = $target;
+    if (!in_array("https://raw.githubusercontent.com/carloswladier/INDICADORES3/{$COMMIT_2810}/{$localName}", $urlsToTry)) {
+        $urlsToTry[] = "https://raw.githubusercontent.com/carloswladier/INDICADORES3/{$COMMIT_2810}/{$localName}";
+    }
 
     $content = null;
     $httpCode = 0;
