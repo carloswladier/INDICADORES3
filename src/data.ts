@@ -88,11 +88,194 @@ export const MOCK_DATA: VisitData[] = [
 ];
 
 export const MOCK_BASE_CIDADE: BaseCidadeData[] = [
-  { cidade: 'São Paulo', tecnologia: 'HFC', base: 5000 },
-  { cidade: 'São Paulo', tecnologia: 'GPON', base: 3000 },
-  { cidade: 'São Paulo', tecnologia: 'HÍBRIDO', base: 1000 },
-  { cidade: 'Rio de Janeiro', tecnologia: 'HFC', base: 4000 },
-  { cidade: 'Rio de Janeiro', tecnologia: 'GPON', base: 2500 },
-  { cidade: 'Belo Horizonte', tecnologia: 'HFC', base: 3000 },
-  { cidade: 'Curitiba', tecnologia: 'HFC', base: 2000 },
+  { cidade: 'Manaus', tecnologia: 'HFC', base: 151887 },
+  { cidade: 'Manaus', tecnologia: 'GPON', base: 25903 },
+  { cidade: 'Manaus', tecnologia: 'HÍBRIDO', base: 5240 },
+  { cidade: 'Manaus', tecnologia: 'OUTROS', base: 719 },
+  { cidade: 'Caxias', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Caxias', tecnologia: 'GPON', base: 968 },
+  { cidade: 'Caxias', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Caxias', tecnologia: 'OUTROS', base: 4 },
+  { cidade: 'Timon', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Timon', tecnologia: 'GPON', base: 1044 },
+  { cidade: 'Timon', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Timon', tecnologia: 'OUTROS', base: 1 },
+  { cidade: 'São Luís', tecnologia: 'HFC', base: 57471 },
+  { cidade: 'São Luís', tecnologia: 'GPON', base: 18650 },
+  { cidade: 'São Luís', tecnologia: 'HÍBRIDO', base: 1665 },
+  { cidade: 'São Luís', tecnologia: 'OUTROS', base: 270 },
+  { cidade: 'Imperatriz', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Imperatriz', tecnologia: 'GPON', base: 11957 },
+  { cidade: 'Imperatriz', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Imperatriz', tecnologia: 'OUTROS', base: 59 },
+  { cidade: 'Macapá', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Macapá', tecnologia: 'GPON', base: 10710 },
+  { cidade: 'Macapá', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Macapá', tecnologia: 'OUTROS', base: 25 },
+  { cidade: 'Santana', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Santana', tecnologia: 'GPON', base: 5657 },
+  { cidade: 'Santana', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Santana', tecnologia: 'OUTROS', base: 17 },
+  { cidade: 'Marabá', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Marabá', tecnologia: 'GPON', base: 3149 },
+  { cidade: 'Marabá', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Marabá', tecnologia: 'OUTROS', base: 26 },
+  { cidade: 'Parauapebas', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Parauapebas', tecnologia: 'GPON', base: 6894 },
+  { cidade: 'Parauapebas', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Parauapebas', tecnologia: 'OUTROS', base: 29 },
+  { cidade: 'Ananindeua', tecnologia: 'HFC', base: 12720 },
+  { cidade: 'Ananindeua', tecnologia: 'GPON', base: 1407 },
+  { cidade: 'Ananindeua', tecnologia: 'HÍBRIDO', base: 11 },
+  { cidade: 'Ananindeua', tecnologia: 'OUTROS', base: 46 },
+  { cidade: 'Belém', tecnologia: 'HFC', base: 87665 },
+  { cidade: 'Belém', tecnologia: 'GPON', base: 22460 },
+  { cidade: 'Belém', tecnologia: 'HÍBRIDO', base: 2232 },
+  { cidade: 'Belém', tecnologia: 'OUTROS', base: 359 },
+  { cidade: 'Castanhal', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Castanhal', tecnologia: 'GPON', base: 9627 },
+  { cidade: 'Castanhal', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Castanhal', tecnologia: 'OUTROS', base: 38 },
+  { cidade: 'Paragominas', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Paragominas', tecnologia: 'GPON', base: 2833 },
+  { cidade: 'Paragominas', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Paragominas', tecnologia: 'OUTROS', base: 19 },
+  { cidade: 'Boa Vista', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Boa Vista', tecnologia: 'GPON', base: 1003 },
+  { cidade: 'Boa Vista', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Boa Vista', tecnologia: 'OUTROS', base: 0 },
+];
+
+export interface BaseAreaData {
+  cidade: string;
+  area: string;
+  tecnologia: Technology;
+  base: number;
+}
+
+export const MOCK_BASE_AREA: BaseAreaData[] = [
+  // BELÉM
+  { cidade: 'Belém', area: 'AREA 1', tecnologia: 'GPON', base: 2204 },
+  { cidade: 'Belém', area: 'AREA 1', tecnologia: 'HFC', base: 25608 },
+  { cidade: 'Belém', area: 'AREA 1', tecnologia: 'HÍBRIDO', base: 318 },
+  { cidade: 'Belém', area: 'AREA 1', tecnologia: 'OUTROS', base: 74 },
+
+  { cidade: 'Belém', area: 'AREA 2', tecnologia: 'GPON', base: 7925 },
+  { cidade: 'Belém', area: 'AREA 2', tecnologia: 'HFC', base: 21817 },
+  { cidade: 'Belém', area: 'AREA 2', tecnologia: 'HÍBRIDO', base: 723 },
+  { cidade: 'Belém', area: 'AREA 2', tecnologia: 'OUTROS', base: 76 },
+
+  { cidade: 'Belém', area: 'AREA 3', tecnologia: 'GPON', base: 11936 },
+  { cidade: 'Belém', area: 'AREA 3', tecnologia: 'HFC', base: 16228 },
+  { cidade: 'Belém', area: 'AREA 3', tecnologia: 'HÍBRIDO', base: 1135 },
+  { cidade: 'Belém', area: 'AREA 3', tecnologia: 'OUTROS', base: 69 },
+
+  { cidade: 'Belém', area: 'AREA BELEM', tecnologia: 'GPON', base: 395 },
+  { cidade: 'Belém', area: 'AREA BELEM', tecnologia: 'HFC', base: 24012 },
+  { cidade: 'Belém', area: 'AREA BELEM', tecnologia: 'HÍBRIDO', base: 56 },
+  { cidade: 'Belém', area: 'AREA BELEM', tecnologia: 'OUTROS', base: 88 },
+
+  // ANANINDEUA
+  { cidade: 'Ananindeua', area: 'AREA ANANINDEUA', tecnologia: 'GPON', base: 1407 },
+  { cidade: 'Ananindeua', area: 'AREA ANANINDEUA', tecnologia: 'HFC', base: 12720 },
+  { cidade: 'Ananindeua', area: 'AREA ANANINDEUA', tecnologia: 'HÍBRIDO', base: 11 },
+  { cidade: 'Ananindeua', area: 'AREA ANANINDEUA', tecnologia: 'OUTROS', base: 45 },
+
+  // MANAUS
+  { cidade: 'Manaus', area: 'MA1', tecnologia: 'GPON', base: 4120 },
+  { cidade: 'Manaus', area: 'MA1', tecnologia: 'HFC', base: 24200 },
+  { cidade: 'Manaus', area: 'MA1', tecnologia: 'HÍBRIDO', base: 820 },
+  { cidade: 'Manaus', area: 'MA1', tecnologia: 'OUTROS', base: 110 },
+
+  { cidade: 'Manaus', area: 'MA2', tecnologia: 'GPON', base: 4804 },
+  { cidade: 'Manaus', area: 'MA2', tecnologia: 'HFC', base: 24296 },
+  { cidade: 'Manaus', area: 'MA2', tecnologia: 'HÍBRIDO', base: 494 },
+  { cidade: 'Manaus', area: 'MA2', tecnologia: 'OUTROS', base: 104 },
+
+  { cidade: 'Manaus', area: 'MA3', tecnologia: 'GPON', base: 7610 },
+  { cidade: 'Manaus', area: 'MA3', tecnologia: 'HFC', base: 20603 },
+  { cidade: 'Manaus', area: 'MA3', tecnologia: 'HÍBRIDO', base: 1794 },
+  { cidade: 'Manaus', area: 'MA3', tecnologia: 'OUTROS', base: 107 },
+
+  { cidade: 'Manaus', area: 'MA4', tecnologia: 'GPON', base: 2732 },
+  { cidade: 'Manaus', area: 'MA4', tecnologia: 'HFC', base: 27451 },
+  { cidade: 'Manaus', area: 'MA4', tecnologia: 'HÍBRIDO', base: 602 },
+  { cidade: 'Manaus', area: 'MA4', tecnologia: 'OUTROS', base: 128 },
+
+  { cidade: 'Manaus', area: 'MA5', tecnologia: 'GPON', base: 6637 },
+  { cidade: 'Manaus', area: 'MA5', tecnologia: 'HFC', base: 35337 },
+  { cidade: 'Manaus', area: 'MA5', tecnologia: 'HÍBRIDO', base: 1530 },
+  { cidade: 'Manaus', area: 'MA5', tecnologia: 'OUTROS', base: 170 },
+
+  // SÃO LUÍS
+  { cidade: 'São Luís', area: 'AREA 1', tecnologia: 'GPON', base: 2515 },
+  { cidade: 'São Luís', area: 'AREA 1', tecnologia: 'HFC', base: 12301 },
+  { cidade: 'São Luís', area: 'AREA 1', tecnologia: 'HÍBRIDO', base: 6 },
+  { cidade: 'São Luís', area: 'AREA 1', tecnologia: 'OUTROS', base: 58 },
+
+  { cidade: 'São Luís', area: 'AREA 2', tecnologia: 'GPON', base: 7362 },
+  { cidade: 'São Luís', area: 'AREA 2', tecnologia: 'HFC', base: 12693 },
+  { cidade: 'São Luís', area: 'AREA 2', tecnologia: 'HÍBRIDO', base: 890 },
+  { cidade: 'São Luís', area: 'AREA 2', tecnologia: 'OUTROS', base: 71 },
+
+  { cidade: 'São Luís', area: 'AREA 3', tecnologia: 'GPON', base: 5006 },
+  { cidade: 'São Luís', area: 'AREA 3', tecnologia: 'HFC', base: 24764 },
+  { cidade: 'São Luís', area: 'AREA 3', tecnologia: 'HÍBRIDO', base: 74 },
+  { cidade: 'São Luís', area: 'AREA 3', tecnologia: 'OUTROS', base: 187 },
+
+  { cidade: 'São Luís', area: 'AREA 04', tecnologia: 'GPON', base: 3767 },
+  { cidade: 'São Luís', area: 'AREA 04', tecnologia: 'HFC', base: 7713 },
+  { cidade: 'São Luís', area: 'AREA 04', tecnologia: 'HÍBRIDO', base: 695 },
+  { cidade: 'São Luís', area: 'AREA 04', tecnologia: 'OUTROS', base: 0 },
+
+  // DEMAIS PRAÇAS NORTE
+  { cidade: 'Macapá', area: 'AREA MACAPA', tecnologia: 'GPON', base: 10710 },
+  { cidade: 'Macapá', area: 'AREA MACAPA', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Macapá', area: 'AREA MACAPA', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Macapá', area: 'AREA MACAPA', tecnologia: 'OUTROS', base: 25 },
+
+  { cidade: 'Santana', area: 'AREA SANTANA', tecnologia: 'GPON', base: 5657 },
+  { cidade: 'Santana', area: 'AREA SANTANA', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Santana', area: 'AREA SANTANA', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Santana', area: 'AREA SANTANA', tecnologia: 'OUTROS', base: 17 },
+
+  { cidade: 'Marabá', area: 'AREA MARABA', tecnologia: 'GPON', base: 3149 },
+  { cidade: 'Marabá', area: 'AREA MARABA', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Marabá', area: 'AREA MARABA', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Marabá', area: 'AREA MARABA', tecnologia: 'OUTROS', base: 26 },
+
+  { cidade: 'Parauapebas', area: 'AREA PARAUAPEBA', tecnologia: 'GPON', base: 6894 },
+  { cidade: 'Parauapebas', area: 'AREA PARAUAPEBA', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Parauapebas', area: 'AREA PARAUAPEBA', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Parauapebas', area: 'AREA PARAUAPEBA', tecnologia: 'OUTROS', base: 29 },
+
+  { cidade: 'Castanhal', area: 'AREA CASTANHAL', tecnologia: 'GPON', base: 9627 },
+  { cidade: 'Castanhal', area: 'AREA CASTANHAL', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Castanhal', area: 'AREA CASTANHAL', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Castanhal', area: 'AREA CASTANHAL', tecnologia: 'OUTROS', base: 38 },
+
+  { cidade: 'Paragominas', area: 'AREA PARAGOMINA', tecnologia: 'GPON', base: 2833 },
+  { cidade: 'Paragominas', area: 'AREA PARAGOMINA', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Paragominas', area: 'AREA PARAGOMINA', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Paragominas', area: 'AREA PARAGOMINA', tecnologia: 'OUTROS', base: 19 },
+
+  { cidade: 'Timon', area: 'AREA TIMON', tecnologia: 'GPON', base: 1044 },
+  { cidade: 'Timon', area: 'AREA TIMON', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Timon', area: 'AREA TIMON', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Timon', area: 'AREA TIMON', tecnologia: 'OUTROS', base: 1 },
+
+  { cidade: 'Caxias', area: 'AREA CAXIAS', tecnologia: 'GPON', base: 968 },
+  { cidade: 'Caxias', area: 'AREA CAXIAS', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Caxias', area: 'AREA CAXIAS', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Caxias', area: 'AREA CAXIAS', tecnologia: 'OUTROS', base: 4 },
+
+  { cidade: 'Boa Vista', area: 'AREA BOA VISTA', tecnologia: 'GPON', base: 1003 },
+  { cidade: 'Boa Vista', area: 'AREA BOA VISTA', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Boa Vista', area: 'AREA BOA VISTA', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Boa Vista', area: 'AREA BOA VISTA', tecnologia: 'OUTROS', base: 0 },
+
+  { cidade: 'Imperatriz', area: 'AREA IMPERATRIZ', tecnologia: 'GPON', base: 11957 },
+  { cidade: 'Imperatriz', area: 'AREA IMPERATRIZ', tecnologia: 'HFC', base: 0 },
+  { cidade: 'Imperatriz', area: 'AREA IMPERATRIZ', tecnologia: 'HÍBRIDO', base: 0 },
+  { cidade: 'Imperatriz', area: 'AREA IMPERATRIZ', tecnologia: 'OUTROS', base: 59 },
 ];

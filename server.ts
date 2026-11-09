@@ -362,6 +362,7 @@ async function startServer() {
       // Migrate legacy repositories to INDICADORES3
       target = target
         .replace("d549372740ded87fa7e2847208066ddf95f55323", "main")
+        .replace("f89188ac8dde26d8884bb4a6fd4460a2e775ed14", "main")
         .replace("/carloswladier/DASH_AT1_G1/", "/carloswladier/INDICADORES3/")
         .replace("/carloswladier/INDICADORES_MANUT/", "/carloswladier/INDICADORES3/")
         .replace("/carloswladier/INDICADORES2/", "/carloswladier/INDICADORES3/")
@@ -406,25 +407,6 @@ async function startServer() {
             'User-Agent': 'Claro-Indicadores-Sync'
           }
         });
-      }
-
-      // If still not ok, try pinned commit f89188ac8dde26d8884bb4a6fd4460a2e775ed14 ("REVISITA 2810")
-      if (!response.ok && fileName) {
-        const COMMIT_2810 = 'f89188ac8dde26d8884bb4a6fd4460a2e775ed14';
-        const pinnedUrl = `https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/${fileName}`;
-        try {
-          const pinnedRes = await fetch(pinnedUrl, {
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'User-Agent': 'Claro-Indicadores-Sync'
-            }
-          });
-          if (pinnedRes.ok) {
-            response = pinnedRes;
-            commitSha = COMMIT_2810;
-          }
-        } catch {}
       }
 
       // If remote fetch failed, check in-memory cache first, then public directory

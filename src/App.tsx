@@ -65,7 +65,7 @@ import {
   LabelList
 } from 'recharts';
 import * as XLSX from 'xlsx';
-import { MOCK_DATA, VisitData, Technology, BaseCidadeData, MOCK_BASE_CIDADE } from './data';
+import { MOCK_DATA, VisitData, Technology, BaseCidadeData, MOCK_BASE_CIDADE, BaseAreaData, MOCK_BASE_AREA } from './data';
 import { cn, formatPercent, formatDecimal, formatInteger } from './lib/utils';
 import { SingleMetricTooltip, ComparisonMetricTooltip } from './components/ChartCustomTooltip';
 import { logApi, LogEntry as ApiLogEntry } from './services/api';
@@ -1033,23 +1033,34 @@ const cleanCityName = (name: string) => {
     .trim();
 };
 
-// Helper to parse numbers from Excel (handles strings with dots/commas)
+// Helper to parse numbers from Excel (handles Brazilian pt-BR dots/commas and strings)
 const parseExcelNumber = (val: any): number => {
-  if (typeof val === 'number') return val;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (!val) return 0;
-  const str = String(val).replace(/\s/g, '');
-  // If it's something like "1.234,56" or "1,234.56"
-  // This is tricky, but usually for base we expect integers or simple floats.
-  // Let's try to remove thousands separators.
-  // If there's both a dot and a comma, the last one is the decimal.
+  let str = String(val).trim().replace(/\s/g, '');
+  
+  // Format with thousand dots and optional decimal comma (e.g. 183.749 or 1.045 or 112.716,50)
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
+    str = str.replace(/\./g, '').replace(',', '.');
+    return parseFloat(str) || 0;
+  }
+  
+  // Format with thousand commas and optional decimal dot (e.g. 183,749 or 1,045.50)
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(str)) {
+    str = str.replace(/,/g, '');
+    return parseFloat(str) || 0;
+  }
+
   const lastDot = str.lastIndexOf('.');
   const lastComma = str.lastIndexOf(',');
   
   if (lastDot > lastComma) {
-    // Dot is decimal, remove commas
+    // If only dot and 3 digits after dot, treat as Brazilian thousands separator
+    if (lastComma === -1 && /^\d+\.\d{3}$/.test(str)) {
+      return parseFloat(str.replace(/\./g, '')) || 0;
+    }
     return parseFloat(str.replace(/,/g, '')) || 0;
   } else if (lastComma > lastDot) {
-    // Comma is decimal, remove dots, then replace comma with dot
     return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
   }
   
@@ -1107,7 +1118,8 @@ const MONTH_ORDER = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 export default function App() {
   const [baseData, setBaseData] = useState<VisitData[]>([]);
   const [at1ViewMode, setAt1ViewMode] = useState<'dashboard' | 'analitico'>('dashboard');
-  const [baseCidadeData, setBaseCidadeData] = useState<BaseCidadeData[]>([]);
+  const [baseCidadeData, setBaseCidadeData] = useState<BaseCidadeData[]>(MOCK_BASE_CIDADE);
+  const [baseAreaData, setBaseAreaData] = useState<BaseAreaData[]>(MOCK_BASE_AREA);
   const [sharedOutageData, setSharedOutageData] = useState<OutageEvent[]>([]);
   const [sharedAt5Data, setSharedAt5Data] = useState<AT5Row[]>([]);
   const [sharedQoeData, setSharedQoeData] = useState<QoeGponRow[]>([]);
@@ -1778,19 +1790,50 @@ export default function App() {
         const isTodos = cityFilter.includes('Todos');
         const isTechTodos = isTechArray ? (techFilter as string[]).includes('Todos') : (techFilter as string) === 'Todos';
         
-        baseCidadeData.forEach(b => {
-          const cleanB = cleanCityName(b.cidade);
-          const normBCidade = normalizeStr(cleanB);
-          const normBTech = normalizeStr(b.tecnologia);
-          if (isTodos) {
-            const isTotalOrRegional = normBCidade.includes('TOTAL') || normBCidade.includes('GERAL') || normBCidade.includes('SUM') ||
-              ['NORTE', 'SUL', 'LESTE', 'OESTE', 'REGIONAL'].includes(normBCidade);
-            if (isTotalOrRegional) return;
-          }
-          const cityMatch = isTodos || normCityFilters.some(cf => normBCidade === cf || normBCidade.includes(cf) || cf.includes(normBCidade));
-          const techMatch = isTechTodos || normTechFilters.includes(normBTech);
-          if (cityMatch && techMatch) baseClientes += b.base;
-        });
+        const isAreaFilterActive = !filters.area.includes('Todos') && filters.area.length > 0 && baseAreaData.length > 0;
+
+        if (isAreaFilterActive) {
+          const normAreaFilters = filters.area.map(a => normalizeStr(String(a).trim()));
+          const candidateCities = !isTodos 
+            ? normCityFilters 
+            : Array.from(new Set(items.map(d => normalizeStr(cleanCityName(d.cidade))))).filter(Boolean);
+
+          baseAreaData.forEach(b => {
+            const cleanB = cleanCityName(b.cidade);
+            const normBCidade = normalizeStr(cleanB);
+            const normBArea = normalizeStr(String(b.area || '').trim());
+            const normBTech = normalizeStr(b.tecnologia);
+
+            const areaMatch = normAreaFilters.some(af => normBArea === af || normBArea.includes(af) || af.includes(normBArea));
+            if (!areaMatch) return;
+
+            const cityMatch = isTodos
+              ? (candidateCities.length === 0 || candidateCities.some(cf => normBCidade === cf || normBCidade.includes(cf) || cf.includes(normBCidade)))
+              : normCityFilters.some(cf => normBCidade === cf || normBCidade.includes(cf) || cf.includes(normBCidade));
+
+            const techMatch = isTechTodos || normTechFilters.includes(normBTech);
+
+            if (cityMatch && techMatch) {
+              baseClientes += b.base;
+            }
+          });
+        }
+
+        if (baseClientes === 0 && !isAreaFilterActive) {
+          baseCidadeData.forEach(b => {
+            const cleanB = cleanCityName(b.cidade);
+            const normBCidade = normalizeStr(cleanB);
+            const normBTech = normalizeStr(b.tecnologia);
+            if (isTodos) {
+              const isTotalOrRegional = normBCidade.includes('TOTAL') || normBCidade.includes('GERAL') || normBCidade.includes('SUM') ||
+                ['NORTE', 'SUL', 'LESTE', 'OESTE', 'REGIONAL'].includes(normBCidade);
+              if (isTotalOrRegional) return;
+            }
+            const cityMatch = isTodos || normCityFilters.some(cf => normBCidade === cf || normBCidade.includes(cf) || cf.includes(normBCidade));
+            const techMatch = isTechTodos || normTechFilters.includes(normBTech);
+            if (cityMatch && techMatch) baseClientes += b.base;
+          });
+        }
 
         const projOsAT1 = (osExec / diasTrab) * diasMes;
         const at1 = baseClientes > 0 ? (projOsAT1 / baseClientes) * 100 : 0;
@@ -1822,7 +1865,7 @@ export default function App() {
         }
       };
     };
-  }, [filters, baseCidadeData, baseData]);
+  }, [filters, baseCidadeData, baseAreaData, baseData]);
 
   // Metrics Calculations (Uses finalFilteredData)
   const metrics = useMemo(() => {
@@ -2248,43 +2291,78 @@ export default function App() {
     const isCidadeTodos = filters.cidade.includes('Todos');
     const normCidadeFilters = filters.cidade.map(c => normalizeStr(cleanCityName(c)));
 
-    baseCidadeData.forEach(item => {
-      const cleanName = cleanCityName(item.cidade);
-      const normCity = normalizeStr(cleanName);
-      const normTech = normalizeStr(item.tecnologia);
+    const isAreaFilterActive = !filters.area.includes('Todos') && filters.area.length > 0 && baseAreaData.length > 0;
+    const normAreaFilters = filters.area.map(a => normalizeStr(String(a).trim()));
 
-      const isTotalOrRegional = 
-        normCity.includes('TOTAL') || 
-        normCity.includes('GERAL') || 
-        normCity.includes('SUM') ||
-        normCity === 'NORTE' || 
-        normCity === 'SUL' || 
-        normCity === 'LESTE' || 
-        normCity === 'OESTE' ||
-        normCity === 'REGIONAL';
-      
-      if (isTotalOrRegional) return;
+    if (isAreaFilterActive) {
+      baseAreaData.forEach(item => {
+        const cleanName = cleanCityName(item.cidade);
+        const normCity = normalizeStr(cleanName);
+        const normArea = normalizeStr(String(item.area || '').trim());
+        const normTech = normalizeStr(item.tecnologia);
 
-      // Filter by Cidade if a city is selected
-      if (!isCidadeTodos) {
-        const matchCity = normCidadeFilters.some(fc => 
-          fc === normCity || normCity.includes(fc) || fc.includes(normCity)
-        );
-        if (!matchCity) return;
-      }
+        const areaMatch = normAreaFilters.some(af => normArea === af || normArea.includes(af) || af.includes(normArea));
+        if (!areaMatch) return;
 
-      const matchTech = isTechTodos || normTechFilters.includes(normTech);
+        // Filter by Cidade if a city is selected
+        if (!isCidadeTodos) {
+          const matchCity = normCidadeFilters.some(fc => 
+            fc === normCity || normCity.includes(fc) || fc.includes(normCity)
+          );
+          if (!matchCity) return;
+        }
 
-      if (matchTech) {
-        cityMap[cleanName] = (cityMap[cleanName] || 0) + item.base;
-      }
+        const matchTech = isTechTodos || normTechFilters.includes(normTech);
 
-      if (techMap[item.tecnologia] !== undefined) {
-        techMap[item.tecnologia] += item.base;
-      } else {
-        techMap['OUTROS'] += item.base;
-      }
-    });
+        if (matchTech) {
+          cityMap[cleanName] = (cityMap[cleanName] || 0) + item.base;
+        }
+
+        if (techMap[item.tecnologia] !== undefined) {
+          techMap[item.tecnologia] += item.base;
+        } else {
+          techMap['OUTROS'] += item.base;
+        }
+      });
+    } else {
+      baseCidadeData.forEach(item => {
+        const cleanName = cleanCityName(item.cidade);
+        const normCity = normalizeStr(cleanName);
+        const normTech = normalizeStr(item.tecnologia);
+
+        const isTotalOrRegional = 
+          normCity.includes('TOTAL') || 
+          normCity.includes('GERAL') || 
+          normCity.includes('SUM') ||
+          normCity === 'NORTE' || 
+          normCity === 'SUL' || 
+          normCity === 'LESTE' || 
+          normCity === 'OESTE' ||
+          normCity === 'REGIONAL';
+        
+        if (isTotalOrRegional) return;
+
+        // Filter by Cidade if a city is selected
+        if (!isCidadeTodos) {
+          const matchCity = normCidadeFilters.some(fc => 
+            fc === normCity || normCity.includes(fc) || fc.includes(normCity)
+          );
+          if (!matchCity) return;
+        }
+
+        const matchTech = isTechTodos || normTechFilters.includes(normTech);
+
+        if (matchTech) {
+          cityMap[cleanName] = (cityMap[cleanName] || 0) + item.base;
+        }
+
+        if (techMap[item.tecnologia] !== undefined) {
+          techMap[item.tecnologia] += item.base;
+        } else {
+          techMap['OUTROS'] += item.base;
+        }
+      });
+    }
 
     const cityData = Object.entries(cityMap)
       .map(([name, value]) => ({ name, value }))
@@ -2307,11 +2385,59 @@ export default function App() {
     }
 
     return { cityData, techData };
-  }, [baseCidadeData, filters.tecnologia, filters.cidade]);
+  }, [baseCidadeData, baseAreaData, filters.tecnologia, filters.cidade, filters.area]);
 
   const totalCityBase = useMemo(() => {
     return baseMetrics.cityData.reduce((acc, curr) => acc + (curr.value || 0), 0);
   }, [baseMetrics.cityData]);
+
+  // Base Data Aggregations by Area for Charts
+  const baseAreaMetrics = useMemo(() => {
+    const areaMap: Record<string, { value: number; cidade: string }> = {};
+    const normTechFilters = filters.tecnologia.map(t => normalizeStr(t));
+    const isTechTodos = filters.tecnologia.includes('Todos');
+    const isCidadeTodos = filters.cidade.includes('Todos');
+    const normCidadeFilters = filters.cidade.map(c => normalizeStr(cleanCityName(c)));
+
+    baseAreaData.forEach(item => {
+      const cleanCidade = cleanCityName(item.cidade);
+      const normCity = normalizeStr(cleanCidade);
+      const normTech = normalizeStr(item.tecnologia);
+      const areaName = String(item.area || '').trim();
+      const normArea = normalizeStr(areaName);
+
+      if (!areaName || normArea.includes('TOTAL') || normArea.includes('GERAL')) return;
+
+      // Filter by Cidade if a city is selected
+      if (!isCidadeTodos) {
+        const matchCity = normCidadeFilters.some(fc => 
+          fc === normCity || normCity.includes(fc) || fc.includes(normCity)
+        );
+        if (!matchCity) return;
+      }
+
+      const matchTech = isTechTodos || normTechFilters.includes(normTech);
+      if (matchTech) {
+        if (!areaMap[areaName]) {
+          areaMap[areaName] = { value: 0, cidade: cleanCidade };
+        }
+        areaMap[areaName].value += item.base;
+      }
+    });
+
+    const totalAreaBase = Object.values(areaMap).reduce((acc, curr) => acc + curr.value, 0);
+
+    const areaData = Object.entries(areaMap)
+      .map(([name, { value, cidade }]) => ({
+        name,
+        cidade,
+        value,
+        percentage: totalAreaBase > 0 ? (value / totalAreaBase) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return { areaData, totalAreaBase };
+  }, [baseAreaData, filters.tecnologia, filters.cidade]);
 
   // AT1 by City Projection Data (strictly filtered when a city is selected)
   const at1ByCityData = useMemo(() => {
@@ -2336,40 +2462,71 @@ export default function App() {
       const normTechFilters = filters.tecnologia.map(t => normalizeStr(t));
       const isTechTodos = filters.tecnologia.includes('Todos');
 
-      // 1. Populate cityMap from base data
-      baseCidadeData.forEach(item => {
-        const cleanName = cleanCityName(item.cidade);
-        const normCity = normalizeStr(cleanName);
-        const normCityKey = normCity.replace(/\s+/g, '');
-        const normTech = normalizeStr(item.tecnologia);
+      const isAreaFilterActive = !filters.area.includes('Todos') && filters.area.length > 0 && baseAreaData.length > 0;
 
-        if (!isCidadeTodos) {
-          const matchCity = normCidadeFilters.some(fc => 
-            fc === normCity || normCity.includes(fc) || fc.includes(normCity)
-          );
-          if (!matchCity) return;
-        }
+      // 1. Populate cityMap from base data (area base if area filter is active, else city base)
+      if (isAreaFilterActive) {
+        const normAreaFilters = filters.area.map(a => normalizeStr(String(a).trim()));
+        baseAreaData.forEach(item => {
+          const cleanName = cleanCityName(item.cidade);
+          const normCity = normalizeStr(cleanName);
+          const normCityKey = normCity.replace(/\s+/g, '');
+          const normTech = normalizeStr(item.tecnologia);
+          const normArea = normalizeStr(String(item.area || '').trim());
 
-        const matchTech = isTechTodos || normTechFilters.includes(normTech);
+          const areaMatch = normAreaFilters.some(af => normArea === af || normArea.includes(af) || af.includes(normArea));
+          if (!areaMatch) return;
 
-        if (matchTech) {
-          const isTotalOrRegional = 
-            normCityKey.includes('TOTAL') || 
-            normCityKey.includes('GERAL') || 
-            normCityKey.includes('SUM') ||
-            normCityKey === 'NORTE' || 
-            normCityKey === 'SUL' || 
-            normCityKey === 'LESTE' || 
-            normCityKey === 'OESTE' ||
-            normCityKey === 'REGIONAL';
-          if (isTotalOrRegional) return;
-
-          if (!cityMap[normCityKey]) {
-            cityMap[normCityKey] = { name: cleanName, osExec: 0, dates: new Set(), base: 0 };
+          if (!isCidadeTodos) {
+            const matchCity = normCidadeFilters.some(fc => 
+              fc === normCity || normCity.includes(fc) || fc.includes(normCity)
+            );
+            if (!matchCity) return;
           }
-          cityMap[normCityKey].base += item.base;
-        }
-      });
+
+          const matchTech = isTechTodos || normTechFilters.includes(normTech);
+          if (matchTech) {
+            if (!cityMap[normCityKey]) {
+              cityMap[normCityKey] = { name: cleanName, osExec: 0, dates: new Set(), base: 0 };
+            }
+            cityMap[normCityKey].base += item.base;
+          }
+        });
+      } else {
+        baseCidadeData.forEach(item => {
+          const cleanName = cleanCityName(item.cidade);
+          const normCity = normalizeStr(cleanName);
+          const normCityKey = normCity.replace(/\s+/g, '');
+          const normTech = normalizeStr(item.tecnologia);
+
+          if (!isCidadeTodos) {
+            const matchCity = normCidadeFilters.some(fc => 
+              fc === normCity || normCity.includes(fc) || fc.includes(normCity)
+            );
+            if (!matchCity) return;
+          }
+
+          const matchTech = isTechTodos || normTechFilters.includes(normTech);
+
+          if (matchTech) {
+            const isTotalOrRegional = 
+              normCityKey.includes('TOTAL') || 
+              normCityKey.includes('GERAL') || 
+              normCityKey.includes('SUM') ||
+              normCityKey === 'NORTE' || 
+              normCityKey === 'SUL' || 
+              normCityKey === 'LESTE' || 
+              normCityKey === 'OESTE' ||
+              normCityKey === 'REGIONAL';
+            if (isTotalOrRegional) return;
+
+            if (!cityMap[normCityKey]) {
+              cityMap[normCityKey] = { name: cleanName, osExec: 0, dates: new Set(), base: 0 };
+            }
+            cityMap[normCityKey].base += item.base;
+          }
+        });
+      }
 
       // 2. Add visit data
       const cityKeys = Object.keys(cityMap);
@@ -2442,7 +2599,7 @@ export default function App() {
     })
     .filter(item => item.current > 0 || item.previous > 0 || item.base > 0)
     .sort((a, b) => b.current - a.current);
-  }, [baseData, baseCidadeData, filters, metrics, comparisonMonths, selectedNodes, selectedBaixas, filterVisitList]);
+  }, [baseData, baseCidadeData, baseAreaData, filters, metrics, comparisonMonths, selectedNodes, selectedBaixas, filterVisitList]);
 
   const COLORS = [CLARO_RED, '#666666', '#999999'];
 
@@ -2496,11 +2653,50 @@ export default function App() {
 
       setImportProgress(5);
 
-      // 2. Read BASE Data
-      const baseCidadeSheetName = wb.SheetNames.find(name => {
-        const n = normalizeStr(name);
-        return n === 'BASE' || n.includes('BASE') || n.includes('REFERENCIA') || n.includes('METAS') || n.includes('CIDADE') || n.includes('CLIENTE') || n.includes('TOTAL');
-      });
+      // 2. Read BASE Data - Prioridade absoluta para a aba BASE_NORTE solicitada pelo usuário
+      const findBaseSheet = (): string | undefined => {
+        // 1. Prioridade 1: Aba que contém BASE e NORTE (ex: BASE_NORTE ou BASE NORTE)
+        for (const name of wb.SheetNames) {
+          const n = normalizeStr(name);
+          if (n === 'BASE NORTE' || (n.includes('BASE') && n.includes('NORTE'))) {
+            const ws = wb.Sheets[name];
+            if (ws) {
+              const test = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+              if (test && test.length > 0) return name;
+            }
+          }
+        }
+
+        // 2. Prioridade 2: Abas de base com dados reais (que não estejam vazias como BASE_AREA)
+        for (const name of wb.SheetNames) {
+          const n = normalizeStr(name);
+          if (n.includes('BASE') && !n.includes('BAIXA')) {
+            const ws = wb.Sheets[name];
+            if (ws) {
+              const test = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+              if (test && test.length > 1) { // Tem cabeçalho e pelo menos 1 linha de dados
+                return name;
+              }
+            }
+          }
+        }
+
+        // 3. Prioridade 3: Outras abas de referência
+        for (const name of wb.SheetNames) {
+          const n = normalizeStr(name);
+          if (n.includes('REFERENCIA') || n.includes('METAS') || n.includes('CIDADE') || n.includes('CLIENTE')) {
+            const ws = wb.Sheets[name];
+            if (ws) {
+              const test = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+              if (test && test.length > 1) return name;
+            }
+          }
+        }
+
+        return undefined;
+      };
+
+      const baseCidadeSheetName = findBaseSheet();
       
       let importedBaseCidade: BaseCidadeData[] = [];
       if (baseCidadeSheetName) {
@@ -2512,7 +2708,7 @@ export default function App() {
           const row = baseRawData[i];
           if (row && row.some(cell => {
             const s = normalizeStr(String(cell || ''));
-            return s === 'CIDADE' || s === 'MUNICIPIO' || s === 'LOCALIDADE' || s === 'BASE';
+            return s === 'CIDADE' || s === 'MUNICIPIO' || s === 'LOCALIDADE' || s === 'BASE TOTAL' || s === 'BASE';
           })) {
             headerRowIndex = i;
             break;
@@ -2522,7 +2718,7 @@ export default function App() {
         const startIdx = headerRowIndex === -1 ? 0 : headerRowIndex + 1;
         const headerRow = headerRowIndex === -1 ? [] : baseRawData[headerRowIndex];
 
-        let colIdxCidade = 0;
+        let colIdxCidade = -1;
         let colIdxHFC = -1;
         let colIdxGPON = -1;
         let colIdxHibrido = -1;
@@ -2532,38 +2728,182 @@ export default function App() {
         if (headerRow.length > 0) {
           headerRow.forEach((cell, idx) => {
             const s = normalizeStr(String(cell || ''));
-            if (s === 'CIDADE' || s === 'MUNICIPIO' || s === 'LOCALIDADE') colIdxCidade = idx;
+            if (s === 'CIDADE' || s === 'MUNICIPIO' || s === 'LOCALIDADE' || s === 'NOME CIDADE') colIdxCidade = idx;
             if (s.includes('HFC')) colIdxHFC = idx;
             if (s.includes('GPON') || s.includes('FIBRA') || s.includes('G PON')) colIdxGPON = idx;
             if (s.includes('HIBRID') || s.includes('HIBRIDO')) colIdxHibrido = idx;
             if (s.includes('OUTRO') || s.includes('OUTRA')) colIdxOutros = idx;
-            if (s === 'BASE' || s === 'CLIENTES' || s === 'TOTAL' || s === 'BASE_CLIENTES') colIdxTotalBase = idx;
+            if (s === 'BASE TOTAL' || s === 'TOTAL BASE' || s === 'BASE' || s === 'CLIENTES' || s === 'TOTAL' || s === 'BASE CLIENTES') {
+              if (!s.includes('HFC') && !s.includes('GPON') && !s.includes('HIBRID') && !s.includes('OUTRO')) {
+                colIdxTotalBase = idx;
+              }
+            }
           });
         }
 
-        // Fallbacks if columns not found by name
-        if (colIdxHFC === -1 && colIdxTotalBase !== -1) colIdxHFC = colIdxTotalBase;
-        if (colIdxHFC === -1) colIdxHFC = 2;
-        if (colIdxGPON === -1) colIdxGPON = 3;
-        if (colIdxHibrido === -1) colIdxHibrido = 4;
-        if (colIdxOutros === -1) colIdxOutros = 5;
+        if (colIdxCidade === -1) colIdxCidade = 0;
 
         importedBaseCidade = baseRawData.slice(startIdx).flatMap((row) => {
           if (!row || row.length <= colIdxCidade) return [];
           
           const rawCidade = String(row[colIdxCidade] || '').trim();
-          if (!rawCidade || normalizeStr(rawCidade) === 'CIDADE' || normalizeStr(rawCidade) === 'MUNICIPIO') return [];
+          const norm = normalizeStr(rawCidade);
+          if (!rawCidade || norm === 'CIDADE' || norm === 'MUNICIPIO' || norm === 'TOTAL' || norm.includes('TOTAL GERAL')) return [];
           
           const cidade = cleanCityName(rawCidade);
           
-          const results = [];
-          if (colIdxHFC !== -1) results.push({ cidade, tecnologia: 'HFC' as Technology, base: parseExcelNumber(row[colIdxHFC]) });
-          if (colIdxGPON !== -1 && colIdxGPON !== colIdxHFC) results.push({ cidade, tecnologia: 'GPON' as Technology, base: parseExcelNumber(row[colIdxGPON]) });
-          if (colIdxHibrido !== -1 && colIdxHibrido !== colIdxHFC) results.push({ cidade, tecnologia: 'HÍBRIDO' as Technology, base: parseExcelNumber(row[colIdxHibrido]) });
-          if (colIdxOutros !== -1 && colIdxOutros !== colIdxHFC) results.push({ cidade, tecnologia: 'OUTROS' as Technology, base: parseExcelNumber(row[colIdxOutros]) });
+          const results: BaseCidadeData[] = [];
+          if (colIdxHFC !== -1 && row[colIdxHFC] !== undefined && row[colIdxHFC] !== null && String(row[colIdxHFC]).trim() !== '') {
+            results.push({ cidade, tecnologia: 'HFC' as Technology, base: parseExcelNumber(row[colIdxHFC]) });
+          }
+          if (colIdxGPON !== -1 && colIdxGPON !== colIdxHFC && row[colIdxGPON] !== undefined && row[colIdxGPON] !== null && String(row[colIdxGPON]).trim() !== '') {
+            results.push({ cidade, tecnologia: 'GPON' as Technology, base: parseExcelNumber(row[colIdxGPON]) });
+          }
+          if (colIdxHibrido !== -1 && colIdxHibrido !== colIdxHFC && row[colIdxHibrido] !== undefined && row[colIdxHibrido] !== null && String(row[colIdxHibrido]).trim() !== '') {
+            results.push({ cidade, tecnologia: 'HÍBRIDO' as Technology, base: parseExcelNumber(row[colIdxHibrido]) });
+          }
+          if (colIdxOutros !== -1 && colIdxOutros !== colIdxHFC && row[colIdxOutros] !== undefined && row[colIdxOutros] !== null && String(row[colIdxOutros]).trim() !== '') {
+            results.push({ cidade, tecnologia: 'OUTROS' as Technology, base: parseExcelNumber(row[colIdxOutros]) });
+          }
+
+          if (results.length === 0 && colIdxTotalBase !== -1 && row[colIdxTotalBase] !== undefined) {
+            results.push({ cidade, tecnologia: 'HFC' as Technology, base: parseExcelNumber(row[colIdxTotalBase]) });
+          }
           
           return results;
         });
+      }
+
+      // Se a planilha não continha dados da base, preserva ou aplica o padrão Claro Norte
+      if (importedBaseCidade.length === 0) {
+        importedBaseCidade = MOCK_BASE_CIDADE;
+      }
+
+      // 2b. Parsing da BASE_AREA (Aba BASE_AREA)
+      const findBaseAreaSheet = () => {
+        for (const name of wb.SheetNames) {
+          const n = normalizeStr(name);
+          if (n === 'BASE_AREA' || n === 'BASE AREA' || n === 'BASE_AREAS' || n === 'BASE AREAS') {
+            return name;
+          }
+        }
+        for (const name of wb.SheetNames) {
+          const n = normalizeStr(name);
+          if (n.includes('BASE') && n.includes('AREA')) {
+            return name;
+          }
+        }
+        return undefined;
+      };
+
+      const baseAreaSheetName = findBaseAreaSheet();
+      let importedBaseArea: BaseAreaData[] = [];
+      if (baseAreaSheetName) {
+        const wsArea = wb.Sheets[baseAreaSheetName];
+        const areaRawData = XLSX.utils.sheet_to_json(wsArea, { header: 1 }) as any[][];
+
+        let currentCidade = '';
+        let currentArea = '';
+
+        let isHorizontal = false;
+        let colIdxCidade = 0;
+        let colIdxArea = 1;
+        let colIdxHFC = -1;
+        let colIdxGPON = -1;
+        let colIdxHibrido = -1;
+        let colIdxOutros = -1;
+        let colIdxTech = -1;
+        let colIdxBase = -1;
+        let startRowIdx = 1;
+
+        for (let r = 0; r < Math.min(areaRawData.length, 10); r++) {
+          const row = areaRawData[r];
+          if (!row) continue;
+          let hasCidade = false;
+          let hasArea = false;
+          row.forEach((cell, idx) => {
+            const s = normalizeStr(String(cell || ''));
+            if (s === 'CIDADE' || s === 'MUNICIPIO' || s === 'LOCALIDADE') { colIdxCidade = idx; hasCidade = true; }
+            if (s === 'AREA' || s === 'AREAS' || s === 'AREA OPERACIONAL' || s === 'SETOR') { colIdxArea = idx; hasArea = true; }
+            if (s.includes('HFC')) { colIdxHFC = idx; isHorizontal = true; }
+            if (s.includes('GPON') || s.includes('FIBRA')) { colIdxGPON = idx; isHorizontal = true; }
+            if (s.includes('HIBRID')) { colIdxHibrido = idx; isHorizontal = true; }
+            if (s.includes('OUTRO')) { colIdxOutros = idx; isHorizontal = true; }
+            if (s === 'TECNOLOGIA' || s === 'TECH' || s === 'TIPO') colIdxTech = idx;
+            if (s === 'BASE' || s === 'VALOR' || s === 'QTD' || s === 'CLIENTES' || s === 'BASE TOTAL') colIdxBase = idx;
+          });
+          if (hasCidade || hasArea) {
+            startRowIdx = r + 1;
+            break;
+          }
+        }
+
+        if (isHorizontal) {
+          for (let r = startRowIdx; r < areaRawData.length; r++) {
+            const row = areaRawData[r];
+            if (!row || row.length === 0) continue;
+            const cCell = String(row[colIdxCidade] || '').trim();
+            const aCell = String(row[colIdxArea] || '').trim();
+            if (cCell) currentCidade = cleanCityName(cCell);
+            if (aCell) currentArea = aCell;
+            if (!currentArea || currentArea.toUpperCase().includes('TOTAL')) continue;
+
+            if (colIdxHFC !== -1 && row[colIdxHFC] !== undefined) {
+              importedBaseArea.push({ cidade: currentCidade || 'Claro Norte', area: currentArea, tecnologia: 'HFC', base: parseExcelNumber(row[colIdxHFC]) });
+            }
+            if (colIdxGPON !== -1 && row[colIdxGPON] !== undefined) {
+              importedBaseArea.push({ cidade: currentCidade || 'Claro Norte', area: currentArea, tecnologia: 'GPON', base: parseExcelNumber(row[colIdxGPON]) });
+            }
+            if (colIdxHibrido !== -1 && row[colIdxHibrido] !== undefined) {
+              importedBaseArea.push({ cidade: currentCidade || 'Claro Norte', area: currentArea, tecnologia: 'HÍBRIDO', base: parseExcelNumber(row[colIdxHibrido]) });
+            }
+            if (colIdxOutros !== -1 && row[colIdxOutros] !== undefined) {
+              importedBaseArea.push({ cidade: currentCidade || 'Claro Norte', area: currentArea, tecnologia: 'OUTROS', base: parseExcelNumber(row[colIdxOutros]) });
+            }
+          }
+        } else {
+          const techCol = colIdxTech !== -1 ? colIdxTech : 2;
+          const baseCol = colIdxBase !== -1 ? colIdxBase : 3;
+
+          for (let r = startRowIdx; r < areaRawData.length; r++) {
+            const row = areaRawData[r];
+            if (!row || row.length === 0) continue;
+
+            const cCell = String(row[colIdxCidade] !== undefined ? row[colIdxCidade] : '').trim();
+            const aCell = String(row[colIdxArea] !== undefined ? row[colIdxArea] : '').trim();
+            const tCell = String(row[techCol] !== undefined ? row[techCol] : '').trim();
+            const bVal = parseExcelNumber(row[baseCol]);
+
+            if (cCell && normalizeStr(cCell) !== 'CIDADE' && !normalizeStr(cCell).includes('TOTAL')) {
+              currentCidade = cleanCityName(cCell);
+            }
+            if (aCell && normalizeStr(aCell) !== 'AREA' && !normalizeStr(aCell).includes('TOTAL')) {
+              currentArea = aCell;
+            }
+
+            if (!currentArea) continue;
+
+            const normTech = normalizeStr(tCell);
+            let tech: Technology | null = null;
+            if (normTech === 'GPON' || normTech.includes('FIBRA')) tech = 'GPON';
+            else if (normTech === 'HFC') tech = 'HFC';
+            else if (normTech.includes('HIBRID')) tech = 'HÍBRIDO';
+            else if (normTech.includes('OUTRO')) tech = 'OUTROS';
+
+            if (tech && bVal >= 0) {
+              importedBaseArea.push({
+                cidade: currentCidade || 'Claro Norte',
+                area: currentArea,
+                tecnologia: tech,
+                base: bVal
+              });
+            }
+          }
+        }
+      }
+
+      if (importedBaseArea.length === 0) {
+        importedBaseArea = MOCK_BASE_AREA;
       }
 
       // 3. Equipment cross-sheet maps (e.g. from ANALITICO_GERADAS_TERMINAL or any sheet with equipment info)
@@ -2831,6 +3171,9 @@ export default function App() {
               setBaseData(mappedData);
               if (importedBaseCidade.length > 0) {
                 setBaseCidadeData(importedBaseCidade);
+              }
+              if (importedBaseArea.length > 0) {
+                setBaseAreaData(importedBaseArea);
               }
 
               // Determine current month or latest month in imported data
@@ -3238,6 +3581,7 @@ export default function App() {
                 onClick={() => {
                   setBaseData([]);
                   setBaseCidadeData([]);
+                  setBaseAreaData([]);
                 }}
                 title="Limpar Dados AT1"
                 className={cn(
@@ -3331,6 +3675,7 @@ export default function App() {
                           onClick={() => {
                             setBaseData([]);
                             setBaseCidadeData([]);
+                            setBaseAreaData([]);
                           }}
                           className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 px-4 rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer text-xs uppercase"
                         >
@@ -3448,6 +3793,7 @@ export default function App() {
                 onClick={() => {
                   setBaseData(MOCK_DATA);
                   setBaseCidadeData(MOCK_BASE_CIDADE);
+                  setBaseAreaData(MOCK_BASE_AREA);
                 }}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all shadow-2xs active:scale-95 uppercase italic text-xs"
               >
@@ -5225,14 +5571,32 @@ export default function App() {
           </div>
         </div>
         {/* Base de Clientes Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Base por Cidade */}
           <div className="bg-white p-8 rounded-3xl shadow-md border border-slate-100">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-[#EE1D23]" />
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
+                  <MapPin className="w-5 h-5 text-[#EE1D23]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-[#333333] uppercase italic tracking-tight">Base de Clientes por Cidade</h3>
+                  {!filters.area.includes('Todos') && filters.area.length > 0 && (
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Filtrado na área: {filters.area.join(', ')}
+                    </p>
+                  )}
+                </div>
               </div>
-              <h3 className="text-lg font-black text-[#333333] uppercase italic tracking-tight">Base de Clientes por Cidade</h3>
+              {!filters.cidade.includes('Todos') && filters.cidade.length > 0 && (
+                <button
+                  onClick={() => setFilters(f => ({ ...f, cidade: ['Todos'] }))}
+                  className="text-[10px] font-black text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-xl transition-colors flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  {filters.cidade.join(', ')}
+                </button>
+              )}
             </div>
             <div className="h-[350px] w-full min-h-[350px]">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -5298,6 +5662,94 @@ export default function App() {
             <p className="text-[10px] text-slate-400 font-bold italic mt-4">* Clique nas barras para filtrar por cidade.</p>
           </div>
 
+          {/* Base de Clientes por Área */}
+          <div className="bg-white p-8 rounded-3xl shadow-md border border-slate-100">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-[#EE1D23]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-[#333333] uppercase italic tracking-tight">Base de Clientes por Área</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base de assinantes por região operacional • Clique para filtrar</p>
+                </div>
+              </div>
+              {!filters.area.includes('Todos') && filters.area.length > 0 && (
+                <button
+                  onClick={() => setFilters(f => ({ ...f, area: ['Todos'] }))}
+                  className="text-[10px] font-black text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-xl transition-colors flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  {filters.area.join(', ')}
+                </button>
+              )}
+            </div>
+            <div className="h-[350px] w-full min-h-[350px]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart 
+                  data={baseAreaMetrics.areaData} 
+                  layout="vertical" 
+                  margin={{ left: 30, right: 40 }}
+                  onClick={(data) => {
+                    if (data && data.activeLabel) {
+                      const area = String(data.activeLabel);
+                      setFilters(prev => ({
+                        ...prev,
+                        area: prev.area.includes(area) && prev.area.length === 1 
+                          ? ['Todos'] 
+                          : [area]
+                      }));
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#333333', fontSize: 11, fontWeight: 800 }}
+                    width={110}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: '#f8fafc' }}
+                    content={(props: any) => (
+                      <SingleMetricTooltip 
+                        {...props}
+                        category="Base por Área"
+                        icon={<Activity className="w-4 h-4" />}
+                        valueLabel="Clientes Ativos"
+                        unit="assinantes"
+                        total={baseAreaMetrics.totalAreaBase}
+                        isSelected={(d) => filters.area.includes(d.name) && !filters.area.includes('Todos')}
+                        clickHint="Clique na barra para filtrar por área e projetar AT1"
+                      />
+                    )}
+                  />
+                  <Bar 
+                    dataKey="value" 
+                    fill="#EE1D23" 
+                    radius={[0, 8, 8, 0]} 
+                    barSize={22} 
+                    label={{ position: 'right', fill: '#666666', fontSize: 10, fontWeight: 800, offset: 10 }}
+                    className="cursor-pointer"
+                  >
+                    {baseAreaMetrics.areaData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-base-area-${index}`} 
+                        fill={filters.area.includes(entry.name) ? '#991B1B' : '#EE1D23'} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold italic mt-4">* Clique nas barras para filtrar por área e recalcular a projeção de AT1.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
           {/* AT1 Projetado por Cidade */}
           <div className="bg-white p-8 rounded-3xl shadow-md border border-slate-100">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -5434,7 +5886,11 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-[#333333] uppercase italic tracking-tight">Base de Clientes por Tecnologia</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Distribuição por tecnologia • Clique para filtrar</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {!filters.area.includes('Todos') && filters.area.length > 0
+                      ? `Área: ${filters.area.join(', ')} • Distribuição por tecnologia`
+                      : 'Distribuição por tecnologia • Clique para filtrar'}
+                  </p>
                 </div>
               </div>
               {!filters.tecnologia.includes('Todos') && filters.tecnologia.length > 0 && (

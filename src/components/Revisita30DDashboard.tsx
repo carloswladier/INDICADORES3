@@ -843,15 +843,15 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     noClick: true
   });
 
-  // Synchronize ONLY Jul_Dez (2º Semestre, incluindo Outubro até 28/10) from GitHub
+  // Synchronize ONLY Jul_Dez (2º Semestre) from GitHub
   const handleGithubSyncJulDez = async (customJulDez?: string) => {
     setIsImporting(true);
     setIsGithubLoading(true);
     setImportProgress(20);
     setError(null);
     setSyncStatus(null);
-    // Limpa filtro de intervalo de datas para exibir imediatamente todos os dias até 28/10
-    setFilters(prev => ({ ...prev, startDate: '', endDate: '' }));
+    // Limpa filtro de intervalo de datas e de mês para exibir todos os dados do arquivo
+    setFilters(prev => ({ ...prev, startDate: '', endDate: '', mes: [] }));
 
     const urlJulDez = customJulDez || githubJulDezUrl.trim() || getGithubRevisitaJulDezUrl();
     try {
@@ -871,7 +871,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
         return rows;
       });
 
-      const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS até 28/10)`;
+      const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS)`;
       setLoadedFiles(prev => {
         const withoutOld = prev.filter(f => !f.includes('Jul_Dez') && !f.includes('Base de Exemplo'));
         return [...withoutOld, entry];
@@ -879,7 +879,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
 
       setSyncStatus({
         type: 'success',
-        message: `Base Julho a Dezembro atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas, dados completos até 28/10).`
+        message: `Base Julho a Dezembro atualizada com sucesso (${formatInteger(rows.length)} OS sincronizadas).`
       });
       setShowGithubInput(false);
       setImportProgress(100);
@@ -899,11 +899,11 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
               }
               return rows;
             });
-            const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS até 28/10)`;
+            const entry = `REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows.length)} OS)`;
             setLoadedFiles(prev => [...prev.filter(f => !f.includes('Jul_Dez') && !f.includes('Base de Exemplo')), entry]);
             setSyncStatus({
               type: 'success',
-              message: `Base Julho a Dezembro carregada via backup local (${formatInteger(rows.length)} OS, dados até 28/10).`
+              message: `Base Julho a Dezembro carregada via backup local (${formatInteger(rows.length)} OS).`
             });
             setImportProgress(100);
             setTimeout(() => setIsImporting(false), 400);
@@ -1003,8 +1003,8 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     setImportProgress(10);
     setError(null);
     setSyncStatus(null);
-    // Limpa filtro de intervalo de datas para garantir visualização total de 01/10 a 28/10
-    setFilters(prev => ({ ...prev, startDate: '', endDate: '' }));
+    // Limpa filtro de intervalo de datas e de mês para visualização total de todos os dados disponíveis
+    setFilters(prev => ({ ...prev, startDate: '', endDate: '', mes: [] }));
 
     const urlJanJun = customJanJun || githubJanJunUrl.trim() || getGithubRevisitaJanJunUrl();
     const urlJulDez = customJulDez || githubJulDezUrl.trim() || getGithubRevisitaJulDezUrl();
@@ -1041,14 +1041,14 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       }
     }
 
-    // 2. Fetch Jul_Dez (com todos os dias de Outubro até 28/10)
+    // 2. Fetch Jul_Dez
     setImportProgress(60);
     try {
       const buffer2 = await fetchGithubFileArrayBuffer(urlJulDez);
       const rows2 = parseExcelBuffer(buffer2, 'REVISITA_30D_Jul_Dez.xlsx');
       if (rows2.length > 0) {
         allRows = mergeDatasets(allRows, rows2);
-        loadedSummaries.push(`REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows2.length)} OS até 28/10)`);
+        loadedSummaries.push(`REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows2.length)} OS)`);
       }
     } catch (err: any) {
       console.warn('[Revisita30D] Jul_Dez fetch failed, trying local fallback...', err);
@@ -1059,7 +1059,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
           const rows2 = parseExcelBuffer(buf, 'REVISITA_30D_Jul_Dez.xlsx');
           if (rows2.length > 0) {
             allRows = mergeDatasets(allRows, rows2);
-            loadedSummaries.push(`REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows2.length)} OS até 28/10)`);
+            loadedSummaries.push(`REVISITA_30D_Jul_Dez.xlsx (${formatInteger(rows2.length)} OS)`);
           }
         } else {
           failedNotes.push(`REVISITA_30D_Jul_Dez.xlsx`);
@@ -1095,13 +1095,13 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (loadedSummaries.length >= 2) {
         setSyncStatus({
           type: 'success',
-          message: `Sincronização dos 2 arquivos concluída com sucesso! ${loadedSummaries.join(' + ')} — Total: ${formatInteger(allRows.length)} ordens analisadas (dados de Outubro completos até 28/10).`
+          message: `Sincronização dos 2 arquivos concluída com sucesso! ${loadedSummaries.join(' + ')} — Total: ${formatInteger(allRows.length)} ordens analisadas.`
         });
       } else {
         const warning = failedNotes.length > 0 ? ` (Aviso: ${failedNotes.join(', ')} não localizado no GitHub)` : '';
         setSyncStatus({
           type: 'success',
-          message: `Sincronização concluída: ${loadedSummaries.join(' + ')} — Total: ${formatInteger(allRows.length)} ordens (dados até 28/10).${warning}`
+          message: `Sincronização concluída: ${loadedSummaries.join(' + ')} — Total: ${formatInteger(allRows.length)} ordens.${warning}`
         });
       }
     } else {
@@ -2173,15 +2173,15 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
               </button>
             ) : (
               <>
-                {/* Sincronizar Jul a Dez (até 28/10) */}
+                {/* Sincronizar Jul a Dez */}
                 <button
                   onClick={() => handleGithubSyncJulDez()}
                   disabled={isGithubLoading}
                   className="flex items-center gap-1.5 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-3.5 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
-                  title="Sincronizar 2º Semestre (Julho a Dezembro, atualizado até 28/10)"
+                  title="Sincronizar 2º Semestre (Julho a Dezembro)"
                 >
                   {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-                  <span>Sincronizar Jul-Dez (até 28/10)</span>
+                  <span>Sincronizar Jul-Dez</span>
                 </button>
 
                 {/* Sincronizar Jan a Jun */}
@@ -2195,15 +2195,15 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
                   <span>Jan-Jun</span>
                 </button>
 
-                {/* Sincronizar GitHub (Ambos os arquivos) */}
+                {/* Sincronizar GitHub (Ambos os arquivos / Ano Todo) */}
                 <button
                   onClick={() => handleGithubSyncBoth()}
                   disabled={isGithubLoading}
                   className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-bold py-2.5 px-3 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
-                  title="Sincronizar ambos os arquivos: REVISITA_30D_Jan_Jun e REVISITA_30D_Jul_Dez"
+                  title="Sincronizar ano todo (Jan-Dez)"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Ano Todo (até 28/10)</span>
+                  <span>JAN-DEZ</span>
                 </button>
               </>
             )}
@@ -2466,7 +2466,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
                   className="flex items-center gap-2 bg-[#EE1D23] hover:bg-red-600 disabled:opacity-60 text-white font-black py-2.5 px-4 rounded-xl transition-all shadow-md shadow-red-500/15 active:scale-95 uppercase italic text-xs cursor-pointer"
                 >
                   {isGithubLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-                  <span>Sincronizar Jul-Dez (até 28/10)</span>
+                  <span>Sincronizar Jul-Dez</span>
                 </button>
                 <button
                   onClick={() => handleGithubSyncJanJun()}
@@ -2482,7 +2482,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
                   className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-800 font-bold py-2.5 px-4 rounded-xl transition-all active:scale-95 uppercase italic text-xs cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Sincronizar Ambos (Jan-Dez até 28/10)</span>
+                  <span>JAN-DEZ</span>
                 </button>
               </>
             )}

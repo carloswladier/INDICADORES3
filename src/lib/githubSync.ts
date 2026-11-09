@@ -14,6 +14,7 @@ function migrateDeprecatedRepoUrl(url: string): string {
   if (!url) return '';
   return url
     .replace('d549372740ded87fa7e2847208066ddf95f55323', 'main')
+    .replace('f89188ac8dde26d8884bb4a6fd4460a2e775ed14', 'main')
     .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
     .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
     .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
@@ -121,27 +122,15 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     return true;
   };
 
-  // Remote URL candidates to attempt
+  // Remote URL candidates to attempt (always prioritizes the latest commit/version from GitHub)
   const remoteCandidates: string[] = [];
-
-  // Pinned commit f89188ac8dde26d8884bb4a6fd4460a2e775ed14 ("REVISITA 2810") which contains the full 28/10 datasets
-  const COMMIT_2810 = 'f89188ac8dde26d8884bb4a6fd4460a2e775ed14';
-  if (fileName) {
-    if (fileName.includes('REVISITA_30D_Jul_Dez')) {
-      remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jul_Dez.xlsx`);
-    } else if (fileName.includes('REVISITA_30D_Jan_Jun')) {
-      remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jan_Jun.xlsx`);
-    } else if (fileName.includes('REVISITA_30DXAT1_GPON')) {
-      remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx`);
-    }
-  }
 
   // Query latest commit SHA for specific file and for main branch on GitHub to bypass CDN caching
   let latestCommitSha: string | null = null;
   try {
-    // 1. Try file-specific commits to get the exact commit that contains/modified this file
+    // 1. Try file-specific commits to get the exact latest commit that modified this file
     if (fileName) {
-      const fileCommitsRes = await fetch(`https://api.github.com/repos/carloswladier/INDICADORES3/commits?path=${encodeURIComponent(fileName)}&per_page=5`, {
+      const fileCommitsRes = await fetch(`https://api.github.com/repos/carloswladier/INDICADORES3/commits?path=${encodeURIComponent(fileName)}&per_page=3`, {
         headers: { 'Accept': 'application/vnd.github.v3+json' },
         cache: 'no-cache'
       });
@@ -157,6 +146,7 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
       }
     }
 
+    // 2. Query latest commit SHA on main
     const commitRes = await fetch('https://api.github.com/repos/carloswladier/INDICADORES3/commits/main', {
       headers: { 'Accept': 'application/vnd.github.v3+json' },
       cache: 'no-cache'
@@ -169,27 +159,33 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
     // Ignore, proceed with regular candidate URLs
   }
 
-  // 1. Commit SHA specific URL (bypasses any Fastly CDN cache since URL path is unique per commit)
+  // 1. Commit SHA specific URL from main (bypasses Fastly CDN cache since URL path is unique per commit)
   if (latestCommitSha && fileName) {
     remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${latestCommitSha}/${fileName}`);
   }
 
-  // 2. Primary requested URL
+  // 2. Direct main branch URL with cache buster
+  if (fileName) {
+    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/${fileName}`);
+  }
+
+  // 3. Primary requested URL
   remoteCandidates.push(primaryUrl);
 
-  // 3. INDICADORES3 explicit equivalent
+  // 4. INDICADORES3 explicit equivalent
   if (primaryUrl.includes('carloswladier')) {
     const indic3 = primaryUrl
       .replace('/carloswladier/DASH_AT1_G1/', '/carloswladier/INDICADORES3/')
       .replace('/carloswladier/INDICADORES_MANUT/', '/carloswladier/INDICADORES3/')
       .replace('/carloswladier/INDICADORES2/', '/carloswladier/INDICADORES3/')
-      .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/');
+      .replace('/carloswladier/INDICADORES/', '/carloswladier/INDICADORES3/')
+      .replace('f89188ac8dde26d8884bb4a6fd4460a2e775ed14', 'main');
     if (!remoteCandidates.includes(indic3)) {
       remoteCandidates.push(indic3);
     }
   }
 
-  // 4. Known official URLs in INDICADORES3
+  // 5. Known official URLs in INDICADORES3
   if (primaryUrl.includes('DASH') && primaryUrl.includes('AT1')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/DASH%20AT1%20PERSONA_ATUALIZADO.xlsx');
   }
@@ -198,15 +194,12 @@ export async function fetchGithubFileArrayBuffer(targetUrl: string): Promise<Arr
   }
   if (primaryUrl.includes('REVISITA_30D_Jul_Dez') || primaryUrl.includes('REVISITA_30D_Norte')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jul_Dez.xlsx');
-    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jul_Dez.xlsx`);
   }
   if (primaryUrl.includes('REVISITA_30D_Jan_Jun')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30D_Jan_Jun.xlsx');
-    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30D_Jan_Jun.xlsx`);
   }
   if (primaryUrl.includes('REVISITA_30DXAT1_GPON')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx');
-    remoteCandidates.push(`https://raw.githubusercontent.com/carloswladier/INDICADORES3/${COMMIT_2810}/REVISITA_30DXAT1_GPON_JUL_DEZ.xlsx`);
   }
   if (primaryUrl.includes('QOE_GPON') || primaryUrl.includes('QOE')) {
     remoteCandidates.push('https://raw.githubusercontent.com/carloswladier/INDICADORES3/main/QOE_GPON_NORTE.xlsx');
