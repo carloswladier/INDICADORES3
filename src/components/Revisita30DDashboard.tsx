@@ -80,6 +80,7 @@ export interface Revisita30DRow {
   empresa: string;
   unidadeNegocio: string;
   loginTecnico: string;
+  antLoginTecnico?: string;
   codigoBaixa: string;
   antCodigoBaixa?: string;
   qtdRevisitas: number; // 0 = Com Padrão, 1 = Sem Padrão
@@ -227,6 +228,7 @@ const generateMockRevisita30DData = (): Revisita30DRow[] => {
         empresa: emp,
         unidadeNegocio: un,
         loginTecnico: tec,
+        antLoginTecnico: tecLogins[(i * 2 + 1 + name.length) % tecLogins.length],
         codigoBaixa: cod,
         antCodigoBaixa: cod,
         qtdRevisitas: 0,
@@ -254,6 +256,7 @@ const generateMockRevisita30DData = (): Revisita30DRow[] => {
         empresa: emp,
         unidadeNegocio: un,
         loginTecnico: tec,
+        antLoginTecnico: tecLogins[(i * 5 + 2 + name.length) % tecLogins.length],
         codigoBaixa: cod,
         antCodigoBaixa: cod,
         qtdRevisitas: 1,
@@ -304,6 +307,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     padraoOs: string[]; // '0', '1'
     codigoBaixa: string[];
     loginTecnico: string[]; // WO_LOGIN_TEC
+    antLoginTecnico: string[]; // ANT_WO_LOGIN_TEC
     startDate: string;
     endDate: string;
   }>({
@@ -315,6 +319,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     padraoOs: [],
     codigoBaixa: [],
     loginTecnico: [],
+    antLoginTecnico: [],
     startDate: '',
     endDate: ''
   });
@@ -336,6 +341,10 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
   const [techLimit, setTechLimit] = useState<number>(15);
   const [techMetric, setTechMetric] = useState<'nota' | 'semPadrao'>('nota');
   const [techSort, setTechSort] = useState<'nota' | 'semPadrao' | 'volume'>('nota');
+
+  // Ant Login Tec chart state (ANT_WO_LOGIN_TEC)
+  const [antTechLimit, setAntTechLimit] = useState<number>(15);
+  const [antTechMetric, setAntTechMetric] = useState<'volume' | 'semPadrao'>('volume');
 
   // Monthly chart state
   const [mensalViewMode, setMensalViewMode] = useState<'bar' | 'composed' | 'line'>('bar');
@@ -487,6 +496,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
         if (normalizedCols.includes('QTDREVISITAS') || normalizedCols.includes('QTDREVISITA')) score += 15;
         if (normalizedCols.includes('WOTPATIVIDADE')) score += 8;
         if (normalizedCols.includes('WOLOGINTEC')) score += 8;
+        if (normalizedCols.includes('ANTWOLOGINTEC')) score += 8;
         if (normalizedCols.includes('CDBAIXAORDEMSERVICO')) score += 8;
         if (normalizedCols.includes('ANTCDBAIXAORDEMSERVICO')) score += 8;
         if (normalizedCols.includes('DTBAIXAORDEMSERVICO')) score += 8;
@@ -577,9 +587,39 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       'REVISITA_30D', 'QTD_REVISITAS_30D', 'QTD_REVISITA_30D'
     ]);
     const idxTipoOs = findColIdx(['WO_TP_ATIVIDADE', 'WOTPATIVIDADE', 'TP_ATIVIDADE', 'TIPO_OS', 'TIPOOS', 'TIPO_ATIVIDADE', 'WO_TIPO', 'TIPO', 'SERVICO', 'ATIVIDADE']);
+    const findAntColIdx = (candidateList: string[]): number => {
+      for (const cand of candidateList) {
+        const cleanCand = cand
+          .toUpperCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Z0-9]/g, '');
+
+        if (colMap[cleanCand] !== undefined) {
+          return colMap[cleanCand];
+        }
+      }
+
+      for (const cand of candidateList) {
+        const cleanCand = cand
+          .toUpperCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Z0-9]/g, '');
+
+        const foundKey = Object.keys(colMap).find(k => k.includes('ANT') && (k.includes(cleanCand) || cleanCand.includes(k)));
+        if (foundKey && colMap[foundKey] !== undefined) {
+          return colMap[foundKey];
+        }
+      }
+
+      return -1;
+    };
+
     const idxLoginTec = findColIdx(['WO_LOGIN_TEC', 'WOLOGINTEC', 'LOGIN_TEC', 'LOGINTEC', 'LOGIN_TECNICO', 'NM_TECNICO', 'TECNICO', 'LOGIN', 'MATRICULA', 'WO_TEC']);
+    const idxAntLoginTec = findAntColIdx(['ANT_WO_LOGIN_TEC', 'ANTWOLOGINTEC', 'ANT_LOGIN_TEC', 'ANTLOGINTEC', 'ANT_LOGIN_TECNICO', 'ANTLOGINTECNICO', 'ANT_WO_TEC', 'ANTWOTEC', 'ANT_LOGIN', 'ANTLOGIN', 'ANT_TECNICO']);
     const idxBaixa = findColIdx(['CD_BAIXA_ORDEM_SERVICO', 'CDBAIXAORDEMSERVICO', 'CODIGO_BAIXA', 'CODIGOBAIXA', 'CD_BAIXA', 'CDBAIXA', 'DS_BAIXA', 'MOTIVO_BAIXA', 'BAIXA']);
-    const idxAntBaixa = findColIdx(['ANT_CD_BAIXA_ORDEM_SERVICO', 'ANTCDBAIXAORDEMSERVICO', 'ANT_CD_BAIXA', 'ANTCDBAIXA', 'ANT_CODIGO_BAIXA', 'ANTCODIGOBAIXA', 'ANT_BAIXA']);
+    const idxAntBaixa = findAntColIdx(['ANT_CD_BAIXA_ORDEM_SERVICO', 'ANTCDBAIXAORDEMSERVICO', 'ANT_CD_BAIXA', 'ANTCDBAIXA', 'ANT_CODIGO_BAIXA', 'ANTCODIGOBAIXA', 'ANT_BAIXA']);
     const idxDataBaixa = findColIdx(['DT_BAIXA_ORDEM_SERVICO', 'DTBAIXAORDEMSERVICO', 'DT_BAIXA', 'DTBAIXA', 'DATA_BAIXA', 'DATA', 'DT_OS', 'FECHAMENTO']);
     const idxMes = findColIdx(['MES', 'MÊS', 'NM_MES', 'NMMES', 'MES_ANO', 'MESANO', 'MES_BAIXA', 'MESBAIXA', 'MONTH']);
 
@@ -623,6 +663,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       const rawRev = idxRevisitas >= 0 ? rowArr[idxRevisitas] : '';
       const rawTipo = idxTipoOs >= 0 ? String(rowArr[idxTipoOs] || '').trim() : '';
       const rawTec = idxLoginTec >= 0 ? String(rowArr[idxLoginTec] || '').trim() : '';
+      const rawAntTec = idxAntLoginTec >= 0 ? String(rowArr[idxAntLoginTec] || '').trim() : '';
       const rawBaixa = idxBaixa >= 0 ? String(rowArr[idxBaixa] || '').trim() : '';
       const rawAntBaixa = idxAntBaixa >= 0 ? String(rowArr[idxAntBaixa] || '').trim() : '';
       const rawData = idxDataBaixa >= 0 ? rowArr[idxDataBaixa] : '';
@@ -652,6 +693,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       const contrato = rawCtr ? rawCtr : String(208500000 + r);
       const tipoOs = rawTipo ? rawTipo.toUpperCase() : 'REPARO FTTH';
       const loginTecnico = rawTec ? rawTec.toUpperCase() : 'TEC_SEM_LOGIN';
+      const antLoginTecnico = rawAntTec ? rawAntTec.toUpperCase() : '';
       const codigoBaixa = rawBaixa ? cleanBaixaCode(rawBaixa).toUpperCase() : 'BAIXA CONCLUÍDA';
       const antCodigoBaixa = rawAntBaixa 
         ? cleanBaixaCode(rawAntBaixa).toUpperCase() 
@@ -704,6 +746,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
         empresa,
         unidadeNegocio,
         loginTecnico,
+        antLoginTecnico,
         codigoBaixa,
         antCodigoBaixa,
         qtdRevisitas,
@@ -1189,6 +1232,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       padraoOs: [],
       codigoBaixa: [],
       loginTecnico: [],
+      antLoginTecnico: [],
       startDate: '',
       endDate: ''
     });
@@ -1208,6 +1252,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       padraoOs: [],
       codigoBaixa: [],
       loginTecnico: [],
+      antLoginTecnico: [],
       startDate: '',
       endDate: ''
     });
@@ -1222,6 +1267,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       'UNIDADE DE NEGÓCIO': r.unidadeNegocio,
       'EMPRESA / PARCEIRO': r.empresa,
       'LOGIN TÉCNICO': r.loginTecnico,
+      'LOGIN ANTERIOR (ANT_WO_LOGIN_TEC)': r.antLoginTecnico || '',
       'TIPO OS': r.tipoOs,
       'CÓDIGO DE BAIXA': r.codigoBaixa,
       'CÓDIGO DE BAIXA ANTERIOR (OFENSOR)': r.antCodigoBaixa || r.codigoBaixa,
@@ -1417,6 +1463,12 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       return filters.loginTecnico.some(l => l.trim().toUpperCase() === rowLogin);
     };
 
+    const matchesAntLoginFilter = (row: Revisita30DRow) => {
+      if (filters.antLoginTecnico.length === 0) return true;
+      const rowAntLogin = (row.antLoginTecnico || '').trim().toUpperCase();
+      return filters.antLoginTecnico.some(l => l.trim().toUpperCase() === rowAntLogin);
+    };
+
     // 0. Months available considering other active filters
     const dataForMeses = data.filter(row => {
       if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
@@ -1424,6 +1476,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
       if (!matchesLoginFilter(row)) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1446,6 +1499,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
       if (!matchesLoginFilter(row)) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1460,6 +1514,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
       if (!matchesLoginFilter(row)) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1474,6 +1529,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
       if (!matchesLoginFilter(row)) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1488,6 +1544,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (!matchesLoginFilter(row)) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1503,6 +1560,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
       if (!matchesLoginFilter(row)) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
       return true;
@@ -1532,6 +1590,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesAntLoginFilter(row)) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (!matchesBaixaFilter(row)) return false;
       if (!matchesDateRange(row.dataBaixa)) return false;
@@ -1552,9 +1611,37 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       return a.localeCompare(b, 'pt-BR');
     });
 
+    // 7. Logins Anteriores (ANT_WO_LOGIN_TEC) available considering other active filters
+    const dataForAntLogins = data.filter(row => {
+      if (filters.mes.length > 0 && !filters.mes.includes(row.mes)) return false;
+      if (filters.municipio.length > 0 && !filters.municipio.some(m => m.trim().toLowerCase() === (row.municipio || '').trim().toLowerCase())) return false;
+      if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
+      if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
+      if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (!matchesLoginFilter(row)) return false;
+      if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
+      if (!matchesBaixaFilter(row)) return false;
+      if (!matchesDateRange(row.dataBaixa)) return false;
+      return true;
+    });
+
+    const antLoginCounts: Record<string, number> = {};
+    dataForAntLogins.forEach(row => {
+      const antTec = (row.antLoginTecnico || '').trim().toUpperCase();
+      if (antTec && antTec !== 'TEC_SEM_LOGIN' && antTec !== 'TEC_NÃO_IDENTIFICADO' && antTec !== 'NÃO INFORMADO' && antTec !== '-') {
+        antLoginCounts[antTec] = (antLoginCounts[antTec] || 0) + 1;
+      }
+    });
+
+    const antLogins = Object.keys(antLoginCounts).sort((a, b) => {
+      const diff = (antLoginCounts[b] || 0) - (antLoginCounts[a] || 0);
+      if (diff !== 0) return diff;
+      return a.localeCompare(b, 'pt-BR');
+    });
+
     const padroes = ['0', '1'];
 
-    return { meses, municipios, tiposOs, empresas, unidades, padroes, codigosBaixa, baixaCounts, logins, loginCounts };
+    return { meses, municipios, tiposOs, empresas, unidades, padroes, codigosBaixa, baixaCounts, logins, loginCounts, antLogins, antLoginCounts };
   }, [data, filters]);
 
   // Toggle or select month filter from chart clicks
@@ -1597,6 +1684,21 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     });
   };
 
+  // Toggle or select ant login tecnico filter from table clicks
+  const handleAntLoginClick = (login: string) => {
+    const cleaned = login.trim().toUpperCase();
+    if (!cleaned || cleaned === 'TEC_SEM_LOGIN' || cleaned === 'TEC_NÃO_IDENTIFICADO') return;
+    setFilters(prev => {
+      const exists = prev.antLoginTecnico.some(l => l.trim().toUpperCase() === cleaned);
+      return {
+        ...prev,
+        antLoginTecnico: exists
+          ? prev.antLoginTecnico.filter(l => l.trim().toUpperCase() !== cleaned)
+          : [...prev.antLoginTecnico, cleaned]
+      };
+    });
+  };
+
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(row => {
@@ -1606,6 +1708,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
       if (filters.loginTecnico.length > 0 && !filters.loginTecnico.some(l => l.trim().toUpperCase() === (row.loginTecnico || '').trim().toUpperCase())) return false;
+      if (filters.antLoginTecnico.length > 0 && !filters.antLoginTecnico.some(l => l.trim().toUpperCase() === (row.antLoginTecnico || '').trim().toUpperCase())) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (filters.codigoBaixa.length > 0) {
         const rowCode = cleanBaixaCode(row.antCodigoBaixa || row.codigoBaixa);
@@ -1742,6 +1845,8 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
       if (filters.tipoOs.length > 0 && !filters.tipoOs.some(t => t.trim().toLowerCase() === (row.tipoOs || '').trim().toLowerCase())) return false;
       if (filters.empresa.length > 0 && !filters.empresa.some(e => e.trim().toLowerCase() === (row.empresa || '').trim().toLowerCase())) return false;
       if (filters.unidadeNegocio.length > 0 && !filters.unidadeNegocio.some(u => u.trim().toLowerCase() === (row.unidadeNegocio || '').trim().toLowerCase())) return false;
+      if (filters.loginTecnico.length > 0 && !filters.loginTecnico.some(l => l.trim().toUpperCase() === (row.loginTecnico || '').trim().toUpperCase())) return false;
+      if (filters.antLoginTecnico.length > 0 && !filters.antLoginTecnico.some(l => l.trim().toUpperCase() === (row.antLoginTecnico || '').trim().toUpperCase())) return false;
       if (filters.padraoOs.length > 0 && !filters.padraoOs.includes(String(row.qtdRevisitas))) return false;
       if (filters.codigoBaixa.length > 0) {
         const rowCode = cleanBaixaCode(row.antCodigoBaixa || row.codigoBaixa);
@@ -2032,6 +2137,59 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     return items;
   }, [filteredData, filters.codigoBaixa]);
 
+  // 8. VOLUME POR LOGIN ANTERIOR (ANT_WO_LOGIN_TEC)
+  const chartAntTecnicoData = useMemo(() => {
+    const map: Record<string, { total: number; semPadrao: number; comPadrao: number; empresa: string; un: string }> = {};
+    let totalAntRows = 0;
+
+    filteredData.forEach(row => {
+      const antTec = (row.antLoginTecnico || '').trim().toUpperCase();
+      if (!antTec || antTec === 'TEC_SEM_LOGIN' || antTec === 'TEC_NÃO_IDENTIFICADO' || antTec === 'NÃO INFORMADO' || antTec === '-') {
+        return;
+      }
+      totalAntRows++;
+      if (!map[antTec]) {
+        map[antTec] = { total: 0, semPadrao: 0, comPadrao: 0, empresa: row.empresa, un: row.unidadeNegocio };
+      }
+      map[antTec].total++;
+      if (row.qtdRevisitas === 1) {
+        map[antTec].semPadrao++;
+      } else {
+        map[antTec].comPadrao++;
+      }
+    });
+
+    let items = Object.entries(map)
+      .map(([tecnico, val]) => {
+        const nota = val.total > 0 ? (val.semPadrao / val.total) * 100 : 0;
+        const percentual = totalAntRows > 0 ? (val.total / totalAntRows) * 100 : 0;
+        return {
+          tecnico,
+          empresa: val.empresa,
+          unidade: val.un,
+          volume: val.total,
+          semPadrao: val.semPadrao,
+          comPadrao: val.comPadrao,
+          nota: Number(nota.toFixed(2)),
+          percentual: Number(percentual.toFixed(2))
+        };
+      })
+      .sort((a, b) => {
+        if (antTechMetric === 'semPadrao') {
+          if (b.semPadrao !== a.semPadrao) return b.semPadrao - a.semPadrao;
+          return b.volume - a.volume;
+        }
+        if (b.volume !== a.volume) return b.volume - a.volume;
+        return b.semPadrao - a.semPadrao;
+      });
+
+    if (filters.antLoginTecnico.length === 0) {
+      items = items.slice(0, antTechLimit);
+    }
+
+    return items;
+  }, [filteredData, antTechLimit, antTechMetric, filters.antLoginTecnico]);
+
   // Filtered detailed table with pagination
   const searchedTableData = useMemo(() => {
     let list = filteredData;
@@ -2043,6 +2201,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
         r.empresa.toLowerCase().includes(q) ||
         r.unidadeNegocio.toLowerCase().includes(q) ||
         r.loginTecnico.toLowerCase().includes(q) ||
+        (r.antLoginTecnico && r.antLoginTecnico.toLowerCase().includes(q)) ||
         r.codigoBaixa.toLowerCase().includes(q) ||
         (r.antCodigoBaixa && r.antCodigoBaixa.toLowerCase().includes(q)) ||
         r.tipoOs.toLowerCase().includes(q) ||
@@ -2077,6 +2236,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
     if (filters.empresa.length > 0) count++;
     if (filters.unidadeNegocio.length > 0) count++;
     if (filters.loginTecnico.length > 0) count++;
+    if (filters.antLoginTecnico.length > 0) count++;
     if (filters.padraoOs.length > 0) count++;
     if (filters.codigoBaixa.length > 0) count++;
     if (filters.startDate || filters.endDate) count++;
@@ -2533,6 +2693,7 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
                 padraoOs: [],
                 codigoBaixa: [],
                 loginTecnico: [],
+                antLoginTecnico: [],
                 startDate: '',
                 endDate: ''
               })}
@@ -2714,8 +2875,8 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
           </div>
         </div>
 
-        {/* 8 Filtros em Dropdown (MultiFilterSelect) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 items-end">
+        {/* 9 Filtros em Dropdown (MultiFilterSelect) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 items-end">
           {/* MÊS */}
           <MultiFilterSelect
             label="MÊS"
@@ -2775,6 +2936,17 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
             optionCounts={filterOptions.loginCounts}
             onChange={(val) => setFilters(prev => ({ ...prev, loginTecnico: val }))}
             placeholder="Todos os Logins"
+          />
+
+          {/* LOGIN ANTERIOR (ANT_WO_LOGIN_TEC) */}
+          <MultiFilterSelect
+            label="ANT_WO_LOGIN_TEC"
+            icon={<UserCheck className="w-3.5 h-3.5" />}
+            value={filters.antLoginTecnico}
+            options={filterOptions.antLogins}
+            optionCounts={filterOptions.antLoginCounts}
+            onChange={(val) => setFilters(prev => ({ ...prev, antLoginTecnico: val }))}
+            placeholder="Pesquisar ANT_WO_LOGIN_TEC..."
           />
 
           {/* PADRÃO OS */}
@@ -2851,6 +3023,15 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
                 <UserCheck className="w-3 h-3 text-[#EE1D23]" />
                 Login: {l}
                 <button type="button" onClick={() => setFilters(prev => ({ ...prev, loginTecnico: prev.loginTecnico.filter(x => x !== l) }))} className="hover:text-red-600 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            {filters.antLoginTecnico.map(l => (
+              <span key={`ant-login-${l}`} className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors font-mono">
+                <UserCheck className="w-3 h-3 text-[#EE1D23]" />
+                ANT_WO_LOGIN_TEC: {l}
+                <button type="button" onClick={() => setFilters(prev => ({ ...prev, antLoginTecnico: prev.antLoginTecnico.filter(x => x !== l) }))} className="hover:text-red-600 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -4323,6 +4504,171 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
         </div>
       </div>
 
+      {/* 7. VOLUME POR LOGIN ANTERIOR (ANT_WO_LOGIN_TEC) */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-50 text-[#EE1D23] flex items-center justify-center shrink-0">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wide text-slate-900">
+                VOLUME POR LOGIN ANTERIOR (ANT_WO_LOGIN_TEC)
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Volume de OS e Reincidências associadas ao técnico anterior (ANT_WO_LOGIN_TEC) • Clique na barra para filtrar
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setAntTechMetric('volume')}
+                className={cn(
+                  "px-2.5 py-1 text-[10px] font-black uppercase rounded-lg transition-all cursor-pointer",
+                  antTechMetric === 'volume'
+                    ? "bg-[#EE1D23] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                Volume Total
+              </button>
+              <button
+                type="button"
+                onClick={() => setAntTechMetric('semPadrao')}
+                className={cn(
+                  "px-2.5 py-1 text-[10px] font-black uppercase rounded-lg transition-all cursor-pointer",
+                  antTechMetric === 'semPadrao'
+                    ? "bg-[#EE1D23] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                Revisitas (1)
+              </button>
+            </div>
+
+            <select
+              value={antTechLimit}
+              onChange={(e) => setAntTechLimit(Number(e.target.value))}
+              className="text-[11px] font-bold bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 text-slate-700 outline-none cursor-pointer"
+            >
+              <option value={10}>Top 10</option>
+              <option value={15}>Top 15</option>
+              <option value={25}>Top 25</option>
+              <option value={50}>Top 50</option>
+            </select>
+
+            {filters.antLoginTecnico.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilters(prev => ({ ...prev, antLoginTecnico: [] }))}
+                className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-xl text-[11px] font-black flex items-center gap-1 transition-all cursor-pointer"
+                title="Limpar filtro ANT_WO_LOGIN_TEC aplicado"
+              >
+                <X className="w-3 h-3" />
+                Filtrando {filters.antLoginTecnico.length} login{filters.antLoginTecnico.length > 1 ? 's' : ''} (Limpar)
+              </button>
+            )}
+          </div>
+        </div>
+
+        {chartAntTecnicoData.length > 0 ? (
+          <div className="h-[420px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartAntTecnicoData} layout="vertical" margin={{ top: 10, right: 45, left: 20, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                <XAxis
+                  type="number"
+                  tick={{ fill: '#64748B', fontSize: 10, fontWeight: 700 }}
+                  tickFormatter={(val) => formatInteger(val)}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="tecnico"
+                  tick={{ fill: '#1E293B', fontSize: 10, fontWeight: 700 }}
+                  width={125}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      const isSel = filters.antLoginTecnico.some(l => l.trim().toUpperCase() === d.tecnico.trim().toUpperCase());
+                      return (
+                        <div className="bg-slate-900 text-white p-3.5 rounded-xl shadow-xl text-xs space-y-1.5 border border-slate-700">
+                          <p className="font-black text-amber-300 border-b border-slate-700 pb-1">ANT_WO_LOGIN_TEC: {d.tecnico}</p>
+                          <p className="text-slate-300">Empresa: <span className="text-white font-bold">{d.empresa}</span></p>
+                          <p className="text-slate-300">UN: <span className="text-white font-bold">{d.unidade}</span></p>
+                          <div className="pt-1 border-t border-slate-800 space-y-1">
+                            <p className="flex justify-between gap-4">
+                              <span className="text-slate-300 font-medium">Volume Total de OS:</span>
+                              <span className="font-black text-white">{formatInteger(d.volume)} OS ({formatPercent(d.percentual)})</span>
+                            </p>
+                            <p className="flex justify-between gap-4">
+                              <span className="text-red-300 font-medium">Sem Padrão (Revisitas - 1):</span>
+                              <span className="font-bold text-red-400">{formatInteger(d.semPadrao)} OS</span>
+                            </p>
+                            <p className="flex justify-between gap-4">
+                              <span className="text-emerald-300 font-medium">Com Padrão (0):</span>
+                              <span className="font-bold text-emerald-400">{formatInteger(d.comPadrao)} OS</span>
+                            </p>
+                            <p className="flex justify-between gap-4">
+                              <span className="text-slate-400 font-medium">Nota de Revisita:</span>
+                              <span className="font-bold text-slate-200">{formatPercent(d.nota)}</span>
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
+                            {isSel ? '✓ Filtro ativo (clique para remover)' : 'Clique na barra para filtrar por este login'}
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar
+                  dataKey={antTechMetric}
+                  fill="#EE1D23"
+                  radius={[0, 6, 6, 0]}
+                  className="cursor-pointer"
+                  onClick={(entry: any) => {
+                    if (entry && entry.tecnico) {
+                      handleAntLoginClick(entry.tecnico);
+                    }
+                  }}
+                >
+                  <LabelList
+                    dataKey={antTechMetric}
+                    position="right"
+                    formatter={(val: number) => formatInteger(val)}
+                    style={{ fill: '#1E293B', fontSize: 10, fontWeight: 800 }}
+                  />
+                  {chartAntTecnicoData.map((entry, index) => {
+                    const isSelected = filters.antLoginTecnico.some(l => l.trim().toUpperCase() === entry.tecnico.trim().toUpperCase());
+                    return (
+                      <Cell
+                        key={`cell-ant-tec-${index}`}
+                        fill={isSelected ? '#991B1B' : '#EE1D23'}
+                        cursor="pointer"
+                        onClick={() => handleAntLoginClick(entry.tecnico)}
+                        stroke={isSelected ? '#1E293B' : 'none'}
+                        strokeWidth={isSelected ? 2 : 0}
+                      />
+                    );
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-48 flex flex-col items-center justify-center text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6">
+            <UserCheck className="w-8 h-8 text-slate-300 mb-2" />
+            <p className="text-xs font-bold text-slate-500 uppercase">Nenhum login encontrado em ANT_WO_LOGIN_TEC para os filtros atuais</p>
+          </div>
+        )}
+      </div>
+
       {/* Tabela Detalhada de Ordens de Serviço */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -4402,7 +4748,29 @@ export default function Revisita30DDashboard({ isGpon = false }: Revisita30DDash
                     {row.empresa}
                   </td>
                   <td className="py-2.5 px-4 font-mono text-slate-700">
-                    {row.loginTecnico}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => handleLoginClick(row.loginTecnico)}
+                        className="font-semibold text-slate-800 hover:text-[#EE1D23] transition-colors text-left cursor-pointer"
+                        title="Clique para filtrar por este técnico (WO_LOGIN_TEC)"
+                      >
+                        {row.loginTecnico}
+                      </button>
+                      {row.antLoginTecnico && (
+                        <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                          <span>Ant:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleAntLoginClick(row.antLoginTecnico!)}
+                            className="font-mono text-slate-500 hover:text-[#EE1D23] transition-colors cursor-pointer"
+                            title="Clique para filtrar por este técnico anterior (ANT_WO_LOGIN_TEC)"
+                          >
+                            {row.antLoginTecnico}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5 px-4 text-slate-600">
                     {row.tipoOs}
